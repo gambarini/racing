@@ -28,3 +28,5 @@ Thumbs.db
 
 # Build session runtime state and reports
 .build/
+
+# Policy: commit *.import and *.uid files (Godot 4.4+); only the .godot/ cache is ignored.
