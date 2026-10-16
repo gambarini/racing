@@ -25,3 +25,6 @@ Thumbs.db
 *.blend1
 *.blend2
 *.blend@
+
+# Build session runtime state and reports
+.build/

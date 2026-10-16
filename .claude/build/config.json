@@ -1,0 +1,60 @@
+{
+  "repo": "gambarini/racing",
+  "main_checkout": "/Users/gambarini/Projects/racing",
+  "base_branch": "main",
+  "state_dir": "/Users/gambarini/Projects/racing/.build",
+  "wiki_git": "git@github.com:gambarini/racing.wiki.git",
+  "wiki_url": "https://github.com/gambarini/racing/wiki",
+
+  "project": {
+    "owner": "gambarini",
+    "number": 2,
+    "id": "PVT_kwHOADRhPM4BnU7J",
+    "status_field": "PVTSSF_lAHOADRhPM4BnU7Jzhl6D4U",
+    "status": { "todo": "f75ad846", "in_progress": "47fc9ee4", "done": "98236657" },
+    "start_date_field": "PVTF_lAHOADRhPM4BnU7Jzhl6EAs",
+    "target_date_field": "PVTF_lAHOADRhPM4BnU7Jzhl6EDI"
+  },
+
+  "tools": {
+    "godot": "/Applications/Godot.app/Contents/MacOS/Godot",
+    "godot_project_dir": "project",
+    "blender": "/opt/homebrew/bin/blender"
+  },
+
+  "milestone_order": [
+    "M0 Project setup",
+    "M1 Driving-feel prototype",
+    "M2 Surfaces & first track",
+    "M3 AI pack & race rules",
+    "M4 Vertical slice",
+    "M5 Content & career",
+    "M6 Polish & release"
+  ],
+
+  "pacing": {
+    "five_hour_normal_below_pct": 60,
+    "five_hour_serial_below_pct": 80,
+    "weekly_stop_at_pct": 90,
+    "reserve_pct": 8,
+    "max_parallel_workers": 2,
+    "min_free_disk_gb": 8,
+    "orchestrator_context_lean_pct": 60,
+    "orchestrator_context_critical_pct": 85,
+    "wind_down_min_minutes": 30,
+    "default_task_minutes": 25,
+    "default_cost_pct": { "game-designer": 2, "gameplay-developer": 6, "technical-artist": 5, "level-designer": 5, "audio-designer": 3, "qa-tester": 3, "tech-reviewer": 2 }
+  },
+
+  "role_by_label": {
+    "area:art": "technical-artist",
+    "area:level": "level-designer",
+    "area:track": "level-designer",
+    "area:audio": "audio-designer",
+    "area:design": "game-designer",
+    "default": "gameplay-developer"
+  },
+
+  "separate_review_from_milestone": "M2 Surfaces & first track",
+  "opus_for_labels": []
+}
