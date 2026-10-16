@@ -20,3 +20,8 @@ telemetry/*.csv
 Thumbs.db
 .vscode/
 .idea/
+
+# Blender backups / autosaves
+*.blend1
+*.blend2
+*.blend@
