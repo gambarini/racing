@@ -30,3 +30,7 @@ Thumbs.db
 .build/
 
 # Policy: commit *.import and *.uid files (Godot 4.4+); only the .godot/ cache is ignored.
+
+# Python
+__pycache__/
+*.pyc
