@@ -1,0 +1,22 @@
+# Godot 4
+.godot/
+*.translation
+export_presets.cfg
+/android/
+builds/
+exports/
+
+# Mono / C#
+.mono/
+data_*/
+mono_crash.*.json
+*.csproj.user
+
+# Telemetry dumps
+telemetry/*.csv
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

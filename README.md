@@ -1,0 +1,18 @@
+# Racing (working title)
+
+A 3D off-road racing game: wheel-to-wheel packs of cars on dirt, gravel, mud and mixed-surface tracks, built around vehicle physics convincing enough that every surface change is something you feel and use.
+
+- **Engine:** Godot 4 · **Platform:** PC · **Mode:** single-player vs AI (multiplayer later)
+- **Design docs / GDD:** [Wiki](https://github.com/gambarini/racing/wiki) — start with [Vision and Pillars](https://github.com/gambarini/racing/wiki/Vision-and-Pillars)
+- **Roadmap:** [GitHub Project](https://github.com/users/gambarini/projects) · [Milestones](https://github.com/gambarini/racing/milestones)
+
+## Where we are
+Pre-production. The first goal is **M1 — Driving-feel prototype**: one car on a test pad with tarmac, gravel and mud patches, a custom tire model and a telemetry overlay. Everything else builds outward from a car that is fun to drive.
+
+## Getting started (once M0 lands)
+1. Install Godot 4 (exact version pinned in `project/project.godot`).
+2. Install Git LFS: `brew install git-lfs && git lfs install`.
+3. Clone, then open `project/project.godot` in Godot.
+
+## Repository layout
+See [Tech Architecture](https://github.com/gambarini/racing/wiki/Tech-Architecture).
