@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # Headless import + GUT + *_check.gd scripts. Used by CI and runnable locally.
 # Usage: GODOT=/path/to/godot tools/ci/run_ci.sh [logdir]
+# Without GODOT: uses `godot` from PATH, else the macOS app bundle.
 # Fails on non-zero exit or any "ERROR:" / "SCRIPT ERROR" in the output.
 set -u
-GODOT="${GODOT:-godot}"
+MAC_GODOT=/Applications/Godot.app/Contents/MacOS/Godot
+if [ -z "${GODOT:-}" ]; then
+  if command -v godot >/dev/null 2>&1; then GODOT=godot
+  elif [ -x "$MAC_GODOT" ]; then GODOT="$MAC_GODOT"
+  else echo "Godot not found: set GODOT or put godot on PATH"; exit 1
+  fi
+fi
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LOGDIR="${1:-$ROOT/ci-logs}"
 mkdir -p "$LOGDIR"
@@ -23,6 +30,14 @@ run_step() { # name, then command...
 }
 
 cd "$ROOT"
+# Importing an LFS pointer instead of the real file makes Godot write an invalid .import
+# (valid=false), which then gets committed by accident. Refuse to run until `git lfs pull`.
+if command -v git-lfs >/dev/null 2>&1; then
+  missing="$(git lfs ls-files 2>/dev/null | awk '$2 == "-" {print $3}')"
+  if [ -n "$missing" ]; then
+    echo "LFS objects not checked out (run: git lfs pull):"; echo "$missing" | head -20; exit 1
+  fi
+fi
 # Warm-up: on a fresh clone the first import emits spurious font/plugin ERRORs (resources are
 # imported while plugins already load them). Not gating; the second pass below is.
 echo "::group::import-warmup"

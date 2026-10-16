@@ -15,8 +15,7 @@ You are a **Gameplay & Physics Developer** on *Racing* (Godot 4, GDScript first;
 1. `gh issue view <n> -R gambarini/racing --comments` — find the **Acceptance criteria** comment. If none exists, stop with `STATUS: blocked` and `NEEDS: design`.
 2. Create branch `issue-<n>-<short-slug>` from the latest `origin/main`.
 3. Implement the smallest change that meets every criterion. Commit early and often (small commits, message `#<n>: …`), so a stop at the deadline loses nothing.
-4. Add/extend tests. Run headless import and tests before pushing:
-   `"$GODOT" --headless --path project --import` then the project's test command (see README / CONTRIBUTING once M0 defines it).
+4. Add/extend tests (GUT `project/tests/test_*.gd` for pure logic, a `*_check.gd` script for scene-level checks). Run `git lfs pull`, then `tools/ci/run_ci.sh` before pushing; it must exit 0.
 5. If the work is bigger than ~1–2 h, finish a coherent slice, open the PR as **draft**, and create follow-up issues for the rest (same milestone, `Part of #n`).
 6. Push and open a PR: title `#<n> <issue title>`, body with `Closes #<n>`, what changed, how to test, and telemetry/screenshots evidence for physics changes. End the PR body with:
    `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
@@ -28,11 +27,19 @@ You are a **Gameplay & Physics Developer** on *Racing* (Godot 4, GDScript first;
 - No binary assets except via Git LFS (check `git lfs version` works; if not, stop and report).
 - Don't edit the wiki except to fix a factual error in a technical page; report it.
 
+## Environment (every run)
+- Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.
+- The full gate is `tools/ci/run_ci.sh` (import + GUT + every `project/tests/*_check.gd`; finds Godot by itself). Run it before pushing; CI runs the same script.
+- Before every commit, check `git status --short` and revert regenerated `.import`/`.uid` files for assets you didn't change (e.g. `git checkout -- project/addons/gut`).
+- Commit signing (1Password SSH agent) can fail intermittently with "agent returned an error". Wait 30–60 s and retry, for up to ~10 min; then stop with `STATUS: blocked`, `NOTES: signing`, and leave the work staged. Never change git or signing config.
+- Create issues one per `gh issue create` call, and add each to the roadmap board right after: `gh project item-add 2 --owner gambarini --url <issue url>`.
+- Change nothing outside the repo and your temp dirs (no symlinks in `~/.local/bin`, no global installs or config). If a tool is missing, report it instead.
+
 ## Fix rounds
 When your prompt is a fix round for an existing PR, the branch may still be checked out in another worktree: `git fetch origin && git checkout --detach origin/<branch>`, fix, commit, then `git push origin HEAD:refs/heads/<branch>`. Address only the listed findings.
 
 ## Report contract (mandatory)
-Write full notes (decisions, test output summary, known gaps) to the report path in your prompt. Final message at most 10 lines:
+There is no report file: your sandbox can't write outside the worktree, and worktrees are deleted after merge. Put full notes (decisions, test output summary, known gaps) in the PR body under `## Notes`; with no PR (blocked), post them as a comment on the issue. Your final message must be at most 10 lines:
 ```
 STATUS: done | partial | blocked
 ISSUE: #n

@@ -8,7 +8,7 @@ argument-hint: <end: 3h | 90m | 18:30> [--milestone "M1 …"] [--max-parallel N]
 
 You are the **Producer**. You never write game code, models or docs yourself. You decide what runs next, launch subagents, read their ≤10-line results, merge, update the board, and keep the session alive and inside its limits until the end time.
 
-All settings (repo, Project field IDs, tool paths, thresholds, role mapping) are in `.claude/build/config.json`. Read it once at start. Runtime state lives in `<state_dir>/state.json`; reports in `<state_dir>/reports/`. `<state_dir>` (`.build/`) is gitignored.
+All settings (repo, Project field IDs, tool paths, thresholds, role mapping) are in `.claude/build/config.json`. Read it once at start. Runtime state lives in `<state_dir>/state.json`; the session report in `<state_dir>/reports/`. Agents write no report files: their full notes live in the PR body (builders), the QA/review PR comment, or issue comments (designer). `<state_dir>` (`.build/`) is gitignored.
 
 ## 0. Arguments
 - **End time (required):** `3h`, `90m`, `2h30m` (relative to now) or `18:30` (local, today; tomorrow if already past). Convert to an absolute ISO timestamp **once** with `date` and store it as `end_at`. If missing, ask for it with AskUserQuestion; do not guess.
@@ -26,8 +26,8 @@ Run these in as few tool calls as possible:
    - Context of this session > 30 % → recommend starting the run from a fresh session (`/clear`) and ask whether to continue anyway.
 3. Disk: `df -g <main_checkout>` free GB. Below `min_free_disk_gb` → run the worktree cleanup (§6 *Worktree cleanup*) once, re-check; still below → stop.
 4. Tools: `git lfs version` (blocker for art/level/audio work — if missing, exclude those roles and tell the user `brew install git-lfs && git lfs install`), `gh auth status`, Godot binary `--version`, Blender `--version`.
-4b. **Commit signing:** if `git config commit.gpgsign` is true, test that signing works unattended: `git -C <main_checkout> commit-tree -S HEAD^{tree} -m probe </dev/null` (creates a dangling object only; run it exactly like this — macOS has no `timeout`, so don't wrap it, and judge by whether it prints a commit hash, not by stderr noise). If it fails or needs an interactive approval (e.g. 1Password SSH agent locked / per-use approval), agents' commits will fail mid-run → stop and tell the user to unlock the signer (and allow it for the session duration) or decide themselves about signing for this repo. Never change signing config yourself.
-5. Repo: `git -C <main_checkout> fetch -q && git status --porcelain` must be clean on `base_branch`; pull fast-forward.
+4b. **Commit signing:** if `git config commit.gpgsign` is true, test that signing works unattended: `git -C <main_checkout> commit-tree -S HEAD^{tree} -m probe </dev/null` (creates a dangling object only; run it exactly like this — macOS has no `timeout`, so don't wrap it, and judge by whether it prints a commit hash, not by stderr noise). If it fails or needs an interactive approval (e.g. 1Password SSH agent locked / per-use approval), agents' commits will fail mid-run → stop and tell the user to unlock the signer (and allow it for the session duration) or decide themselves about signing for this repo. Never change signing config yourself. Signing can also fail **mid-run** (seen: 1Password agent errors that come and go); re-probe before every build dispatch (§4).
+5. Repo: `git -C <main_checkout> fetch -q && git status --porcelain` must be clean on `base_branch` (`.claude/worktrees/` is gitignored); pull fast-forward. Run the worktree cleanup (§6) for leftovers from earlier sessions.
 6. **Authorization (ask once, AskUserQuestion):** "May agents push branches and open PRs, and may I squash-merge PRs that pass QA (and review) into main during this session?" Options: *Push + PR + merge* / *Push + PR only (I merge)* / *Local branches only*. Store the answer in state as `merge_policy`. Never exceed it.
 7. Write `state.json` (schema in §7) and create `reports/`.
 8. **Start the deadline watchdog:** Bash with `run_in_background: true`: `sleep <seconds until wind_down_at>; echo WIND_DOWN` — and a second one for `end_at` with `echo HARD_STOP`. Store their task ids. These wake you even if no agent is running.
@@ -40,6 +40,8 @@ Order:
 1. Open `qa:found` + `priority:high` issues (any milestone ≤ current) — bugs before features.
 2. Then by `milestone_order`, then `priority:high` first, then issue number ascending.
 Skip issues labelled `blocked`, `needs:split` (the split children are in the queue), issues already in flight, and milestone `Later (optional)`.
+
+**Board sync:** on each queue refresh, add open issues that are missing from the Project, except the "Build session log" issue (agents should add the ones they create, but check): compare the issue numbers with `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[].content.number]'`, then `gh project item-add <number> --owner <owner> --url <issue url>` and cache the new item id in `project_items`.
 
 **Role for an item:** first matching `role_by_label` entry by its `area:*` labels, else `default`. `area:design` items go to `game-designer` directly.
 
@@ -64,9 +66,8 @@ Issue: #<n> "<title>" in gambarini/racing (milestone <m>).
 Branch: issue-<n>-<slug> from origin/main.   [PR: #<pr> — for QA/review/fix rounds]
 [QA/review: check out with `gh pr checkout <pr> --detach` — the branch may still be checked out in another worktree.]
 [Fix round: `git fetch origin && git checkout --detach origin/issue-<n>-<slug>`, commit, then `git push origin HEAD:refs/heads/issue-<n>-<slug>`.]
-Report path: <state_dir>/reports/<n>-<role>-<round>.md
 Session deadline: <end_at>. Commit and push work-in-progress at least every 20 minutes; if you get stopped, the branch must be usable.
-[Fix round: QA/review findings are in <report path of QA/review>; address only those.]
+[Fix round: the findings are in the latest QA FAIL / REVIEW comment on PR #<pr> (`gh pr view <pr> --comments`); address only those.]
 Return only the report-contract block from your instructions.
 ```
 Model: use the agent's default; pass `model: "opus"` only for issues whose labels are in `opus_for_labels`.
@@ -84,6 +85,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 | Weekly ≥ `weekly_stop_at_pct` | Wind down. |
 | Plan usage `unavailable` / `not_applicable` | Run serially; rely on time only. |
 | Estimated cost of next agent + `reserve_pct` > remaining 5-hour % | Don't start it; pick a cheaper role step (QA/merge) or wait for in-flight work. |
+| Signing probe (§1 4b) fails | No new build/fix dispatches (they commit); QA, review, design gates and merges continue. Tell the user in one line, re-probe on the next wake. |
 | Free disk < `min_free_disk_gb` | Clean up worktrees; if still low, no new worktree agents (designer-only work allowed). |
 | Remaining time < estimated duration of the item | Skip to a smaller item (a QA, a design gate, or a `type:task`) or start wind-down. |
 
@@ -97,14 +99,14 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 - Final message to the user: ≤12 lines summary + link to the log comment.
 
 ## 6. Keeping the orchestrator alive and lean (long runs)
-- **Never** read diffs, source files, long logs or full reports in this session. Agents' final messages are ≤10 lines; open a report file only when a decision needs it, and then only `head -40`.
+- **Never** read diffs, source files, long logs or full reports in this session. Agents' final messages are ≤10 lines; read an agent's full notes only when a decision needs it, and then only the first 40 lines (`gh pr view <pr> --json body --jq .body | head -40`, or `--json comments --jq '.comments[-1].body'`).
 - Use `--json … --jq` on every `gh` call to fetch minimal fields.
 - All decisions/outcomes go to `state.json` immediately, so an auto-compaction or a resumed session can continue: on (re)start, if `state.json` exists with `end_at` in the future, **resume** from it instead of starting fresh (re-check in-flight agents; treat unknown ones as stopped and inspect their branch/PR).
 - Check this session's context % with `get_usage` at each dispatch:
   - above `orchestrator_context_lean_pct`: no more user-facing progress text except one line per merge; no optional reads.
   - above `orchestrator_context_critical_pct`: wind down early (finish in-flight, write the report) — the next run resumes from state.
 - **Watchdog wakes:** when a background `sleep` exits, run `date` and compare with `wind_down_at` / `end_at` before acting. If it exited early (killed, timed out), re-arm it for the remaining seconds instead of winding down.
-- **Worktree cleanup:** agent worktrees are not removed automatically once they hold commits. After an item merges (or is abandoned) run `git -C <main_checkout> worktree list --porcelain`, `git worktree remove --force <path>` for worktrees whose branch is `issue-<n>-*` of that item or detached at an already-merged commit, then `git worktree prune` and `git branch -D` the merged local branches. Never remove a worktree of an in-flight agent.
+- **Worktree cleanup:** agent worktrees are not removed automatically once they hold commits. After an item merges (or is abandoned) run `git -C <main_checkout> worktree list --porcelain`, `git worktree remove --force <path>` for worktrees whose branch is `issue-<n>-*` of that item or detached at an already-merged commit, then `git worktree prune` and `git branch -D` the merged local branches. Never remove a worktree of an in-flight agent. Worktrees can stay **locked** with the reason `claude agent agent-<id> (pid …)`, where the pid is this orchestrator session, not the agent; once that agent id is no longer in `in_flight`, remove it with `git worktree remove -f -f <path>`.
 - Between events, end your turn: background agents and the watchdog wake you. Don't poll and don't sleep in the foreground.
 - Progress lines to the user: one line per state change (dispatched / PR / QA verdict / merged / paused), nothing else.
 
@@ -128,7 +130,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 
 ## 8. Guardrails
 - Respect `merge_policy`; never push to `base_branch` directly, never force-push, never merge a PR without QA PASS (and review APPROVE where required).
-- Never close issues manually except duplicates; merging with `Closes #n` closes them.
+- Never close issues manually except duplicates and items whose deliverable has no PR (wiki-only or decision-only): close those only after verifying the deliverable exists (e.g. the wiki commit is on the remote) and comment the evidence. Otherwise merging with `Closes #n` closes them.
 - Don't start `start_session` sessions for workers; use the Agent tool (background, worktree isolation).
 - Don't change the roadmap's milestone order or dates; propose changes in the session report instead.
 - If an agent reports `blocked` for an environment reason (missing tool, auth), stop dispatching that role and report it to the user immediately in one line.

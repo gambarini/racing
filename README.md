@@ -25,4 +25,6 @@ Tests use [GUT](https://github.com/bitwes/Gut) **v9.6.1** (pinned), installed at
 godot --headless --path project --import --quit      # once after a fresh clone
 godot --headless --path project -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
 ```
-Exit code is 0 when all tests pass, non-zero otherwise. CI (#4) calls the same command. On macOS, `godot` is `/Applications/Godot.app/Contents/MacOS/Godot`.
+Exit code is 0 when all tests pass, non-zero otherwise. On macOS, `godot` is `/Applications/Godot.app/Contents/MacOS/Godot`.
+
+The full CI gate (import, GUT and every `project/tests/*_check.gd`) is `tools/ci/run_ci.sh`. It uses `$GODOT` if set, else `godot` from `PATH`, else the macOS app bundle, and refuses to run while any LFS file is still a pointer: run `git lfs pull` first (importing pointers makes Godot write invalid `.import` files).
