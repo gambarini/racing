@@ -23,6 +23,8 @@ var brake := 0.0 ## 0..1
 var wheels: Array[Wheel] = []
 var _exclude: Array[RID] = []
 var _g := 9.81
+var _surface_tires := {} ## surface id -> TireParams derived from _surface_base
+var _surface_base: TireParams
 
 
 func _ready() -> void:
@@ -58,6 +60,10 @@ func _apply_definition() -> void:
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = definition.com_position()
 	inertia = definition.inertia # explicit tensor, never auto
+	# No engine-side linear damping: the default 0.1 /s is a hidden ~2 m/s^2 drag at 20 m/s that
+	# swamps rolling resistance (#12). All speed-dependent drag lives in the sim (surfaces, aero).
+	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	linear_damp = 0.0
 	can_sleep = false # the suspension keeps feeding forces; sleeping would freeze the ride
 	if find_child("Chassis", false, false) == null:
 		var box := BoxShape3D.new()
@@ -93,10 +99,16 @@ func step_wheels(delta: float) -> void:
 		tire_params = TireParams.new()
 	var d := definition
 	var wheel_mass := mass * 0.25 # a quarter of the mass per wheel
+	if _surface_base != tire_params:
+		_surface_base = tire_params
+		_surface_tires.clear()
 	for w in wheels:
+		var surf := SurfaceRegistry.get_surface(w.surface_id)
+		var tp := _tire_for(w.surface_id, surf)
 		var fx_body := 0.0
 		var fy_body := 0.0
 		var fwd := Vector3.ZERO
+		var vel := Vector3.ZERO
 		var right := Vector3.ZERO
 		var brake := w.brake_torque + (d.handbrake_torque * w.handbrake_gain if handbrake else 0.0)
 		if w.is_grounded:
@@ -107,20 +119,20 @@ func step_wheels(delta: float) -> void:
 			# which is a negative rotation about +Y).
 			fwd = fwd.rotated(n, -w.steer_angle)
 			right = fwd.cross(n).normalized()
-			var vel := _point_velocity(w.contact_point)
+			vel = _point_velocity(w.contact_point)
 			var vx := vel.dot(fwd)
 			var vy := vel.dot(right)
-			var target := TireModel.slip_ratio(w.omega, w.radius, vx, tire_params)
-			w.kappa = TireModel.relax(w.kappa, target, vx, delta, tire_params)
-			var target_a := TireModel.slip_angle(vx, vy, tire_params)
-			w.alpha = TireModel.relax(w.alpha, target_a, vx, delta, tire_params)
+			var target := TireModel.slip_ratio(w.omega, w.radius, vx, tp)
+			w.kappa = TireModel.relax(w.kappa, target, vx, delta, tp)
+			var target_a := TireModel.slip_angle(vx, vy, tp)
+			w.alpha = TireModel.relax(w.alpha, target_a, vx, delta, tp)
 			# Gravity's slope components: part of what the tire must cancel to hold/stop the car.
 			var gv := Vector3.DOWN * _g * wheel_mass
 			var push_x := gv.dot(fwd)
 			var push_y := gv.dot(right)
-			var f0 := TireModel.compute(w.kappa, w.alpha, w.fz, tire_params)
+			var f0 := TireModel.compute(w.kappa, w.alpha, w.fz, tp)
 			var sl := WheelSpin.fx_slopes(w.kappa, w.omega, vx, w.fz, w.radius, vx, delta,
-					tire_params, w.alpha)
+					tp, w.alpha)
 			fx_body = WheelSpin.implicit_fx(f0.x, sl.x, sl.y, w.drive_torque, w.radius,
 					d.wheel_inertia, wheel_mass, delta, push_x)
 			# A braked wheel that stays locked cannot spin up, so its slope must not soften the
@@ -129,7 +141,7 @@ func step_wheels(delta: float) -> void:
 					d.wheel_inertia, delta) == 0.0:
 				fx_body = WheelSpin.implicit_fx(f0.x, 0.0, sl.y, w.drive_torque, w.radius,
 						d.wheel_inertia, wheel_mass, delta, push_x)
-			var sy := WheelSpin.fy_slope(w.kappa, w.alpha, vx, vy, w.fz, delta, tire_params)
+			var sy := WheelSpin.fy_slope(w.kappa, w.alpha, vx, vy, w.fz, delta, tp)
 			fy_body = WheelSpin.implicit_fy(f0.y, sy, wheel_mass, delta, push_y)
 			# Grip must not reverse the car within a tick.
 			fx_body = TireModel.limit_to_stop(fx_body, vx, wheel_mass, delta, push_x)
@@ -145,6 +157,25 @@ func step_wheels(delta: float) -> void:
 		w.fy = fy_body
 		if tire_forces_enabled and w.is_grounded:
 			apply_force(fwd * fx_body + right * fy_body, w.contact_point - global_position)
+			_apply_resistance(w, surf, vel, wheel_mass, delta)
+
+
+## Tire parameters for a surface id, derived once per (base tire, surface) and cached.
+func _tire_for(id: StringName, surf: SurfaceDefinition) -> TireParams:
+	if not _surface_tires.has(id):
+		_surface_tires[id] = TireParams.for_surface(tire_params, surf)
+	return _surface_tires[id]
+
+
+## Rolling resistance and deformation drag (#12): a force against the contact-point velocity in
+## the ground plane, F = Fz * (Crr + k v^2), capped so it cannot reverse the motion in one tick.
+func _apply_resistance(w: Wheel, surf: SurfaceDefinition, vel: Vector3, wheel_mass: float, delta: float) -> void:
+	var vt := vel - w.contact_normal * vel.dot(w.contact_normal)
+	var speed := vt.length()
+	if speed < 1e-4:
+		return
+	var f := minf(surf.resistance_force(w.fz, speed), wheel_mass * speed / delta)
+	apply_force(-vt / speed * f, w.contact_point - global_position)
 
 
 ## Probe, compute and apply all suspension forces for one tick.

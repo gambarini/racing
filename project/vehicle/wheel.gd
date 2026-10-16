@@ -9,7 +9,7 @@ var contact_normal := Vector3.UP
 var compression := 0.0 ## m, 0 = full droop
 var compression_rate := 0.0 ## m/s, + = compressing
 var fz := 0.0 ## N, force along the suspension axis
-var surface_id: StringName = &"default"
+var surface_id: StringName = &"tarmac"
 var hit_distance := INF ## mount-to-ground along the ray (>= radius means hub clear of chassis)
 
 # Spin state (#10). omega is integrated only by Vehicle._physics_process via WheelSpin.
@@ -44,5 +44,18 @@ func probe(space: PhysicsDirectSpaceState3D, exclude: Array[RID], body_down: Vec
 	contact_normal = hit.normal
 	hit_distance = from.distance_to(hit.position)
 	compression = clampf(travel - (hit_distance - radius), 0.0, travel)
-	var col: Object = hit.collider
-	surface_id = col.get_meta(&"surface_id", &"default") if col != null else &"default"
+	surface_id = surface_id_of(hit.collider)
+
+
+## Surface id of a collider: metadata `surface_id` first, then a group `surface_<id>`, else tarmac.
+static func surface_id_of(col: Object) -> StringName:
+	if col == null:
+		return &"tarmac"
+	if col.has_meta(&"surface_id"):
+		return StringName(str(col.get_meta(&"surface_id")))
+	if col is Node:
+		for g in (col as Node).get_groups():
+			var s := String(g)
+			if s.begins_with("surface_") and s.length() > 8:
+				return StringName(s.substr(8))
+	return &"tarmac"

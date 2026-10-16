@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="SurfaceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://surfaces/surface_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"mud"
+peak_mu_scale = 0.45
+slide_mu_scale = 0.5
+peak_slip_scale = 2.5
+rolling_resistance = 0.08
+deformation_drag = 0.0002
