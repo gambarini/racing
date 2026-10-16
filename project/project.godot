@@ -1,0 +1,17 @@
+; Engine configuration file.
+; Pinned Godot build: 4.6.2.stable.official.71f334935
+
+config_version=5
+
+[application]
+
+config/name="Racing"
+run/main_scene="res://tests/empty_test.tscn"
+config/features=PackedStringArray("4.6")
+config/godot_version="4.6.2.stable.official.71f334935"
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=120
+common/physics_interpolation=true
