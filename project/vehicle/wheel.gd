@@ -16,6 +16,7 @@ var hit_distance := INF ## mount-to-ground along the ray (>= radius means hub cl
 var omega := 0.0 ## rad/s, + = rolling forward
 var kappa := 0.0 ## slip ratio fed to the tire model (relaxed)
 var alpha := 0.0 ## rad, slip angle fed to the tire model (relaxed)
+var steer_angle := 0.0 ## rad, + = right turn (written by #82, read by VehicleVisual)
 var fy := 0.0 ## N, lateral tire force actually applied (after the stop limiter)
 var fx := 0.0 ## N, longitudinal tire force actually applied (after the stop limiter)
 var drive_torque := 0.0 ## Nm input from the powertrain (#11), + = forward
