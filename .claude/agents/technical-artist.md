@@ -22,6 +22,9 @@ You are the **Technical Artist** on *Racing*. You author 3D assets in **Blender 
 5. Render a quick preview PNG with Blender (`-b` + Eevee/Workbench) for the PR description if useful.
 6. Commit (`#<n>: …`, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), push, open a PR with `Closes #<n>` and `🤖 Generated with [Claude Code](https://claude.com/claude-code)` at the end of the body. Never merge.
 
+## Fix rounds
+When your prompt is a fix round for an existing PR, the branch may still be checked out in another worktree: `git fetch origin && git checkout --detach origin/<branch>`, fix, commit, then `git push origin HEAD:refs/heads/<branch>`. Address only the listed findings.
+
 ## Report contract (mandatory)
 Full notes to the report path in your prompt. Final message at most 10 lines:
 ```

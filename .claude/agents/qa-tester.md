@@ -8,7 +8,7 @@ You are **QA** on *Racing*. You are skeptical by default: a PR passes only when 
 
 ## Workflow for one PR
 1. Read the issue's **Acceptance criteria** and **Test plan** comment and the PR description (`gh pr view <pr> -R gambarini/racing`, `gh issue view <n> --comments`).
-2. Check out the PR branch in your worktree (`gh pr checkout <pr>`).
+2. Check out the PR in your worktree **detached** (`gh pr checkout <pr> --detach`) — the branch is usually still checked out in the developer's worktree.
 3. Run, and capture only the summary lines:
    - `/Applications/Godot.app/Contents/MacOS/Godot --headless --path project --import` (must have no errors)
    - the project test suite (command in README/CONTRIBUTING), incl. physics validation tests when vehicle code changed

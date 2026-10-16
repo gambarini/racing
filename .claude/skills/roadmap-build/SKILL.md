@@ -18,13 +18,15 @@ All settings (repo, Project field IDs, tool paths, thresholds, role mapping) are
 
 ## 1. Preflight (stop and report if a blocker fails)
 Run these in as few tool calls as possible:
+0. Load deferred tools in one call: `ToolSearch` with `select:mcp__ccd_session_mgmt__get_usage,TaskStop`. If `get_usage` is not available (e.g. plain CLI), treat plan usage as `unavailable`, run serially and rely on time only.
 1. `date` → now; compute `end_at`, `wind_down_at = end_at − max(wind_down_min_minutes, avg task minutes)`.
 2. `mcp__ccd_session_mgmt__get_usage` → plan windows (5-hour, weekly) and **this session's** context %. Record a baseline.
    - 5-hour ≥ `five_hour_serial_below_pct` and it resets after `end_at` → tell the user the session can't do real work; stop.
    - Weekly ≥ `weekly_stop_at_pct` → stop.
    - Context of this session > 30 % → recommend starting the run from a fresh session (`/clear`) and ask whether to continue anyway.
-3. Disk: `df -g <main_checkout>` free GB. Below `min_free_disk_gb` → run `mcp__ccd_host__clean_up_worktrees` once, re-check; still below → stop.
+3. Disk: `df -g <main_checkout>` free GB. Below `min_free_disk_gb` → run the worktree cleanup (§6 *Worktree cleanup*) once, re-check; still below → stop.
 4. Tools: `git lfs version` (blocker for art/level/audio work — if missing, exclude those roles and tell the user `brew install git-lfs && git lfs install`), `gh auth status`, Godot binary `--version`, Blender `--version`.
+4b. **Commit signing:** if `git config commit.gpgsign` is true, test that signing works unattended: `git -C <main_checkout> commit-tree -S HEAD^{tree} -m probe` (creates a dangling object only). If it fails or needs an interactive approval (e.g. 1Password SSH agent locked / per-use approval), agents' commits will fail mid-run → stop and tell the user to unlock the signer (and allow it for the session duration) or decide themselves about signing for this repo. Never change signing config yourself.
 5. Repo: `git -C <main_checkout> fetch -q && git status --porcelain` must be clean on `base_branch`; pull fast-forward.
 6. **Authorization (ask once, AskUserQuestion):** "May agents push branches and open PRs, and may I squash-merge PRs that pass QA (and review) into main during this session?" Options: *Push + PR + merge* / *Push + PR only (I merge)* / *Local branches only*. Store the answer in state as `merge_policy`. Never exceed it.
 7. Write `state.json` (schema in §7) and create `reports/`.
@@ -51,7 +53,7 @@ For each picked issue `#n` (set Project Status → In Progress with `gh project 
 3. **QA** — when the build agent returns a PR: launch `qa-tester` (`isolation: "worktree"`, background).
    - FAIL → relaunch the **same role** with the QA findings (max 2 fix rounds per item, then label `blocked`, comment why, move on).
 4. **Review** — from milestone `separate_review_from_milestone` onwards, and only for PRs that change code: launch `tech-reviewer` after QA PASS. CHANGES with blocking findings → one fix round, then QA again.
-5. **Merge** (only if `merge_policy` allows): `gh pr ready <pr>` if draft and complete, then `gh pr merge <pr> --squash --delete-branch`. Fetch/pull `base_branch` in the main checkout. Set Project Status → Done (the issue closes via `Closes #n`). Then `mcp__ccd_host__clean_up_worktrees` if disk < 2× `min_free_disk_gb`.
+5. **Merge** (only if `merge_policy` allows): `gh pr ready <pr>` if draft and complete, then `gh pr merge <pr> --squash --delete-branch`. Judge success by `gh pr view <pr> --json state --jq .state` == `MERGED`, not the exit code (deleting the local branch can fail while a worktree still holds it). Fetch/pull `base_branch` in the main checkout. Set Project Status → Done (the issue closes via `Closes #n`). Then run the worktree cleanup (§6) for this item's worktrees.
 6. Record the item outcome, duration and usage cost in state.
 
 New issues created by agents (`qa:found`, sub-issues) enter the queue automatically on the next queue refresh; refresh the queue after every merge, not on every wake.
@@ -60,6 +62,8 @@ New issues created by agents (`qa:found`, sub-issues) enter the queue automatica
 ```
 Issue: #<n> "<title>" in gambarini/racing (milestone <m>).
 Branch: issue-<n>-<slug> from origin/main.   [PR: #<pr> — for QA/review/fix rounds]
+[QA/review: check out with `gh pr checkout <pr> --detach` — the branch may still be checked out in another worktree.]
+[Fix round: `git fetch origin && git checkout --detach origin/issue-<n>-<slug>`, commit, then `git push origin HEAD:refs/heads/issue-<n>-<slug>`.]
 Report path: <state_dir>/reports/<n>-<role>-<round>.md
 Session deadline: <end_at>. Commit and push work-in-progress at least every 20 minutes; if you get stopped, the branch must be usable.
 [Fix round: QA/review findings are in <report path of QA/review>; address only those.]
@@ -99,6 +103,8 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 - Check this session's context % with `get_usage` at each dispatch:
   - above `orchestrator_context_lean_pct`: no more user-facing progress text except one line per merge; no optional reads.
   - above `orchestrator_context_critical_pct`: wind down early (finish in-flight, write the report) — the next run resumes from state.
+- **Watchdog wakes:** when a background `sleep` exits, run `date` and compare with `wind_down_at` / `end_at` before acting. If it exited early (killed, timed out), re-arm it for the remaining seconds instead of winding down.
+- **Worktree cleanup:** agent worktrees are not removed automatically once they hold commits. After an item merges (or is abandoned) run `git -C <main_checkout> worktree list --porcelain`, `git worktree remove --force <path>` for worktrees whose branch is `issue-<n>-*` of that item or detached at an already-merged commit, then `git worktree prune` and `git branch -D` the merged local branches. Never remove a worktree of an in-flight agent.
 - Between events, end your turn: background agents and the watchdog wake you. Don't poll and don't sleep in the foreground.
 - Progress lines to the user: one line per state change (dispatched / PR / QA verdict / merged / paused), nothing else.
 

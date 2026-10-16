@@ -14,6 +14,9 @@ You are the **Level Designer** on *Racing*. Read the wiki pages *Track Design* a
 5. Verify headless import (`/Applications/Godot.app/Contents/MacOS/Godot --headless --path project --import`) and any test the issue requires.
 6. Commit (`#<n>: …`, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), push, PR with `Closes #<n>` and `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. Never merge.
 
+## Fix rounds
+When your prompt is a fix round for an existing PR, the branch may still be checked out in another worktree: `git fetch origin && git checkout --detach origin/<branch>`, fix, commit, then `git push origin HEAD:refs/heads/<branch>`. Address only the listed findings.
+
 ## Report contract (mandatory)
 Full notes to the report path in your prompt. Final message at most 10 lines:
 ```
