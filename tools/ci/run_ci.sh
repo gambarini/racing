@@ -8,6 +8,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LOGDIR="${1:-$ROOT/ci-logs}"
 mkdir -p "$LOGDIR"
 rc=0
+BENIGN_RE="ERROR: FreeType: Error loading font"
 
 run_step() { # name, then command...
   local name="$1"; shift
@@ -17,8 +18,14 @@ run_step() { # name, then command...
   local code=${PIPESTATUS[0]}
   echo "::endgroup::"
   if [ "$code" -ne 0 ]; then echo "STEP FAILED: $name (exit $code)"; rc=1; fi
-  if grep -E "(SCRIPT ERROR|ERROR):" "$log" >/dev/null; then
-    echo "STEP FAILED: $name (ERROR in output)"; grep -nE "SCRIPT ERROR|ERROR:" "$log" | head -20; rc=1
+  # Known-benign engine noise (#72): macOS headless can fail to load a system fallback font and
+  # print "ERROR: FreeType: Error loading font". Only that exact message is ignored (and reported);
+  # every other ERROR / SCRIPT ERROR still fails the step.
+  local benign; benign=$(grep -cE "$BENIGN_RE" "$log")
+  if [ "$benign" -gt 0 ]; then echo "NOTE: $name: ignored $benign known-benign FreeType font ERROR line(s) (#72)"; fi
+  if grep -E "(SCRIPT ERROR|ERROR):" "$log" | grep -vE "$BENIGN_RE" | grep . >/dev/null; then
+    echo "STEP FAILED: $name (ERROR in output)"
+    grep -nE "SCRIPT ERROR|ERROR:" "$log" | grep -vE "$BENIGN_RE" | head -20; rc=1
   fi
 }
 
