@@ -1,0 +1,844 @@
+[gd_scene load_steps=101 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_tarmac"]
+albedo_color = Color(0.25, 0.25, 0.27, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_tarmac_patch"]
+albedo_color = Color(0.12, 0.12, 0.14, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_gravel"]
+albedo_color = Color(0.62, 0.55, 0.42, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_mud"]
+albedo_color = Color(0.33, 0.22, 0.12, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_ring"]
+albedo_color = Color(0.9, 0.9, 0.95, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_cone"]
+albedo_color = Color(1.0, 0.45, 0.05, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_landing"]
+albedo_color = Color(0.2, 0.6, 0.9, 1)
+
+[sub_resource type="BoxShape3D" id="shape_1"]
+size = Vector3(400.0000, 1.0000, 400.0000)
+
+[sub_resource type="BoxMesh" id="mesh_2"]
+size = Vector3(400.0000, 1.0000, 400.0000)
+
+[sub_resource type="BoxShape3D" id="shape_3"]
+size = Vector3(50.0000, 0.1000, 50.0000)
+
+[sub_resource type="BoxMesh" id="mesh_4"]
+size = Vector3(50.0000, 0.1000, 50.0000)
+
+[sub_resource type="BoxShape3D" id="shape_5"]
+size = Vector3(50.0000, 0.1000, 50.0000)
+
+[sub_resource type="BoxMesh" id="mesh_6"]
+size = Vector3(50.0000, 0.1000, 50.0000)
+
+[sub_resource type="BoxShape3D" id="shape_7"]
+size = Vector3(50.0000, 0.1000, 50.0000)
+
+[sub_resource type="BoxMesh" id="mesh_8"]
+size = Vector3(50.0000, 0.1000, 50.0000)
+
+[sub_resource type="BoxMesh" id="mesh_9"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_10"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_11"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_12"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_13"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_14"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_15"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_16"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_17"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_18"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_19"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_20"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_21"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_22"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_23"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_24"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_25"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_26"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_27"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_28"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_29"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_30"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_31"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_32"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_33"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_34"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_35"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_36"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_37"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_38"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_39"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_40"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_41"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_42"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_43"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_44"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_45"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_46"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_47"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_48"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_49"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_50"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_51"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_52"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_53"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_54"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_55"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_56"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_57"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_58"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_59"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_60"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_61"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_62"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_63"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_64"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_65"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_66"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_67"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_68"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_69"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_70"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_71"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_72"]
+size = Vector3(3.0618, 0.0200, 8.0000)
+
+[sub_resource type="CylinderShape3D" id="cshape_73"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_74"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderShape3D" id="cshape_75"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_76"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderShape3D" id="cshape_77"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_78"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderShape3D" id="cshape_79"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_80"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderShape3D" id="cshape_81"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_82"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderShape3D" id="cshape_83"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_84"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderShape3D" id="cshape_85"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_86"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderShape3D" id="cshape_87"]
+radius = 0.25
+height = 0.7
+
+[sub_resource type="CylinderMesh" id="cmesh_88"]
+top_radius = 0.02
+bottom_radius = 0.25
+height = 0.7
+
+[sub_resource type="BoxShape3D" id="shape_89"]
+size = Vector3(40.0000, 1.0000, 10.0000)
+
+[sub_resource type="BoxMesh" id="mesh_90"]
+size = Vector3(40.0000, 1.0000, 10.0000)
+
+[sub_resource type="BoxShape3D" id="shape_91"]
+size = Vector3(4.8097, 1.0000, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_92"]
+size = Vector3(4.8097, 1.0000, 8.0000)
+
+[sub_resource type="BoxMesh" id="mesh_93"]
+size = Vector3(8.0000, 0.0200, 30.0000)
+
+[node name="ProvingGround" type="Node3D"]
+metadata/pad_size = Vector2(400, 400)
+
+[node name="Ground" type="StaticBody3D" parent="." groups=["surface_tarmac"]]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, -0.500000, 0.000000)
+metadata/surface_id = "tarmac"
+
+[node name="Collision" type="CollisionShape3D" parent="./Ground"]
+shape = SubResource("shape_1")
+
+[node name="Mesh" type="MeshInstance3D" parent="./Ground"]
+mesh = SubResource("mesh_2")
+surface_material_override/0 = SubResource("mat_tarmac")
+
+[node name="Patch_Tarmac" type="StaticBody3D" parent="." groups=["surface_tarmac"]]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -110.000000, -0.030000, -20.000000)
+metadata/surface_id = "tarmac"
+
+[node name="Collision" type="CollisionShape3D" parent="./Patch_Tarmac"]
+shape = SubResource("shape_3")
+
+[node name="Mesh" type="MeshInstance3D" parent="./Patch_Tarmac"]
+mesh = SubResource("mesh_4")
+surface_material_override/0 = SubResource("mat_tarmac_patch")
+
+[node name="Patch_Gravel" type="StaticBody3D" parent="." groups=["surface_gravel"]]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -30.000000, -0.030000, -20.000000)
+metadata/surface_id = "gravel"
+
+[node name="Collision" type="CollisionShape3D" parent="./Patch_Gravel"]
+shape = SubResource("shape_5")
+
+[node name="Mesh" type="MeshInstance3D" parent="./Patch_Gravel"]
+mesh = SubResource("mesh_6")
+surface_material_override/0 = SubResource("mat_gravel")
+
+[node name="Patch_Mud" type="StaticBody3D" parent="." groups=["surface_mud"]]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 50.000000, -0.030000, -20.000000)
+metadata/surface_id = "mud"
+
+[node name="Collision" type="CollisionShape3D" parent="./Patch_Mud"]
+shape = SubResource("shape_7")
+
+[node name="Mesh" type="MeshInstance3D" parent="./Patch_Mud"]
+mesh = SubResource("mesh_8")
+surface_material_override/0 = SubResource("mat_mud")
+
+[node name="Spawn_Flat" type="Marker3D" parent="." groups=["spawn_point"]]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.400000, 160.000000)
+
+[node name="Spawn_Gravel" type="Marker3D" parent="." groups=["spawn_point"]]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -30.000000, 0.400000, 25.000000)
+
+[node name="Spawn_Mud" type="Marker3D" parent="." groups=["spawn_point"]]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 50.000000, 0.400000, 25.000000)
+
+[node name="Circle" type="Node3D" parent="."]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -100.000000, 0.000000, 100.000000)
+metadata/radius = 30.0
+metadata/width = 8.0
+metadata/surface_id = "tarmac"
+metadata/segments = 64
+
+[node name="Seg_00" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.000000, -0.000000, -1.000000, 0.000000, 1.000000, 0.000000, 1.000000, 0.000000, 0.000000, 30.000000, 0.030000, 0.000000)
+mesh = SubResource("mesh_9")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_01" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.098017, 0.000000, -0.995185, 0.000000, 1.000000, 0.000000, 0.995185, -0.000000, -0.098017, 29.855542, 0.030000, 2.940514)
+mesh = SubResource("mesh_10")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_02" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.195090, 0.000000, -0.980785, 0.000000, 1.000000, 0.000000, 0.980785, -0.000000, -0.195090, 29.423558, 0.030000, 5.852710)
+mesh = SubResource("mesh_11")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_03" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.290285, 0.000000, -0.956940, 0.000000, 1.000000, 0.000000, 0.956940, -0.000000, -0.290285, 28.708210, 0.030000, 8.708540)
+mesh = SubResource("mesh_12")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_04" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.382683, 0.000000, -0.923880, 0.000000, 1.000000, 0.000000, 0.923880, -0.000000, -0.382683, 27.716386, 0.030000, 11.480503)
+mesh = SubResource("mesh_13")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_05" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.471397, 0.000000, -0.881921, 0.000000, 1.000000, 0.000000, 0.881921, -0.000000, -0.471397, 26.457638, 0.030000, 14.141902)
+mesh = SubResource("mesh_14")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_06" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.555570, 0.000000, -0.831470, 0.000000, 1.000000, 0.000000, 0.831470, -0.000000, -0.555570, 24.944088, 0.030000, 16.667107)
+mesh = SubResource("mesh_15")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_07" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.634393, 0.000000, -0.773010, 0.000000, 1.000000, 0.000000, 0.773010, -0.000000, -0.634393, 23.190314, 0.030000, 19.031799)
+mesh = SubResource("mesh_16")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_08" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.707107, 0.000000, -0.707107, 0.000000, 1.000000, 0.000000, 0.707107, -0.000000, -0.707107, 21.213203, 0.030000, 21.213203)
+mesh = SubResource("mesh_17")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_09" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.773010, 0.000000, -0.634393, 0.000000, 1.000000, 0.000000, 0.634393, -0.000000, -0.773010, 19.031799, 0.030000, 23.190314)
+mesh = SubResource("mesh_18")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_10" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.831470, 0.000000, -0.555570, 0.000000, 1.000000, 0.000000, 0.555570, -0.000000, -0.831470, 16.667107, 0.030000, 24.944088)
+mesh = SubResource("mesh_19")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_11" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.881921, 0.000000, -0.471397, 0.000000, 1.000000, 0.000000, 0.471397, -0.000000, -0.881921, 14.141902, 0.030000, 26.457638)
+mesh = SubResource("mesh_20")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_12" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.923880, 0.000000, -0.382683, 0.000000, 1.000000, 0.000000, 0.382683, -0.000000, -0.923880, 11.480503, 0.030000, 27.716386)
+mesh = SubResource("mesh_21")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_13" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.956940, 0.000000, -0.290285, 0.000000, 1.000000, 0.000000, 0.290285, -0.000000, -0.956940, 8.708540, 0.030000, 28.708210)
+mesh = SubResource("mesh_22")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_14" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.980785, 0.000000, -0.195090, 0.000000, 1.000000, 0.000000, 0.195090, -0.000000, -0.980785, 5.852710, 0.030000, 29.423558)
+mesh = SubResource("mesh_23")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_15" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.995185, 0.000000, -0.098017, 0.000000, 1.000000, 0.000000, 0.098017, -0.000000, -0.995185, 2.940514, 0.030000, 29.855542)
+mesh = SubResource("mesh_24")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_16" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-1.000000, 0.000000, -0.000000, 0.000000, 1.000000, 0.000000, 0.000000, -0.000000, -1.000000, 0.000000, 0.030000, 30.000000)
+mesh = SubResource("mesh_25")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_17" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.995185, 0.000000, 0.098017, 0.000000, 1.000000, 0.000000, -0.098017, 0.000000, -0.995185, -2.940514, 0.030000, 29.855542)
+mesh = SubResource("mesh_26")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_18" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.980785, 0.000000, 0.195090, 0.000000, 1.000000, 0.000000, -0.195090, 0.000000, -0.980785, -5.852710, 0.030000, 29.423558)
+mesh = SubResource("mesh_27")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_19" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.956940, 0.000000, 0.290285, 0.000000, 1.000000, 0.000000, -0.290285, 0.000000, -0.956940, -8.708540, 0.030000, 28.708210)
+mesh = SubResource("mesh_28")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_20" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.923880, 0.000000, 0.382683, 0.000000, 1.000000, 0.000000, -0.382683, 0.000000, -0.923880, -11.480503, 0.030000, 27.716386)
+mesh = SubResource("mesh_29")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_21" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.881921, 0.000000, 0.471397, 0.000000, 1.000000, 0.000000, -0.471397, 0.000000, -0.881921, -14.141902, 0.030000, 26.457638)
+mesh = SubResource("mesh_30")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_22" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.831470, 0.000000, 0.555570, 0.000000, 1.000000, 0.000000, -0.555570, 0.000000, -0.831470, -16.667107, 0.030000, 24.944088)
+mesh = SubResource("mesh_31")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_23" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.773010, 0.000000, 0.634393, 0.000000, 1.000000, 0.000000, -0.634393, 0.000000, -0.773010, -19.031799, 0.030000, 23.190314)
+mesh = SubResource("mesh_32")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_24" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.707107, 0.000000, 0.707107, 0.000000, 1.000000, 0.000000, -0.707107, 0.000000, -0.707107, -21.213203, 0.030000, 21.213203)
+mesh = SubResource("mesh_33")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_25" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.634393, 0.000000, 0.773010, 0.000000, 1.000000, 0.000000, -0.773010, 0.000000, -0.634393, -23.190314, 0.030000, 19.031799)
+mesh = SubResource("mesh_34")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_26" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.555570, 0.000000, 0.831470, 0.000000, 1.000000, 0.000000, -0.831470, 0.000000, -0.555570, -24.944088, 0.030000, 16.667107)
+mesh = SubResource("mesh_35")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_27" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.471397, 0.000000, 0.881921, 0.000000, 1.000000, 0.000000, -0.881921, 0.000000, -0.471397, -26.457638, 0.030000, 14.141902)
+mesh = SubResource("mesh_36")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_28" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.382683, 0.000000, 0.923880, 0.000000, 1.000000, 0.000000, -0.923880, 0.000000, -0.382683, -27.716386, 0.030000, 11.480503)
+mesh = SubResource("mesh_37")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_29" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.290285, 0.000000, 0.956940, 0.000000, 1.000000, 0.000000, -0.956940, 0.000000, -0.290285, -28.708210, 0.030000, 8.708540)
+mesh = SubResource("mesh_38")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_30" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.195090, 0.000000, 0.980785, 0.000000, 1.000000, 0.000000, -0.980785, 0.000000, -0.195090, -29.423558, 0.030000, 5.852710)
+mesh = SubResource("mesh_39")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_31" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.098017, 0.000000, 0.995185, 0.000000, 1.000000, 0.000000, -0.995185, 0.000000, -0.098017, -29.855542, 0.030000, 2.940514)
+mesh = SubResource("mesh_40")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_32" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(-0.000000, 0.000000, 1.000000, 0.000000, 1.000000, 0.000000, -1.000000, 0.000000, -0.000000, -30.000000, 0.030000, 0.000000)
+mesh = SubResource("mesh_41")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_33" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.098017, 0.000000, 0.995185, 0.000000, 1.000000, 0.000000, -0.995185, 0.000000, 0.098017, -29.855542, 0.030000, -2.940514)
+mesh = SubResource("mesh_42")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_34" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.195090, 0.000000, 0.980785, 0.000000, 1.000000, 0.000000, -0.980785, 0.000000, 0.195090, -29.423558, 0.030000, -5.852710)
+mesh = SubResource("mesh_43")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_35" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.290285, 0.000000, 0.956940, 0.000000, 1.000000, 0.000000, -0.956940, 0.000000, 0.290285, -28.708210, 0.030000, -8.708540)
+mesh = SubResource("mesh_44")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_36" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.382683, 0.000000, 0.923880, 0.000000, 1.000000, 0.000000, -0.923880, 0.000000, 0.382683, -27.716386, 0.030000, -11.480503)
+mesh = SubResource("mesh_45")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_37" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.471397, 0.000000, 0.881921, 0.000000, 1.000000, 0.000000, -0.881921, 0.000000, 0.471397, -26.457638, 0.030000, -14.141902)
+mesh = SubResource("mesh_46")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_38" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.555570, 0.000000, 0.831470, 0.000000, 1.000000, 0.000000, -0.831470, 0.000000, 0.555570, -24.944088, 0.030000, -16.667107)
+mesh = SubResource("mesh_47")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_39" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.634393, 0.000000, 0.773010, 0.000000, 1.000000, 0.000000, -0.773010, 0.000000, 0.634393, -23.190314, 0.030000, -19.031799)
+mesh = SubResource("mesh_48")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_40" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.707107, 0.000000, 0.707107, 0.000000, 1.000000, 0.000000, -0.707107, 0.000000, 0.707107, -21.213203, 0.030000, -21.213203)
+mesh = SubResource("mesh_49")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_41" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.773010, 0.000000, 0.634393, 0.000000, 1.000000, 0.000000, -0.634393, 0.000000, 0.773010, -19.031799, 0.030000, -23.190314)
+mesh = SubResource("mesh_50")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_42" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.831470, 0.000000, 0.555570, 0.000000, 1.000000, 0.000000, -0.555570, 0.000000, 0.831470, -16.667107, 0.030000, -24.944088)
+mesh = SubResource("mesh_51")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_43" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.881921, 0.000000, 0.471397, 0.000000, 1.000000, 0.000000, -0.471397, 0.000000, 0.881921, -14.141902, 0.030000, -26.457638)
+mesh = SubResource("mesh_52")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_44" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.923880, 0.000000, 0.382683, 0.000000, 1.000000, 0.000000, -0.382683, 0.000000, 0.923880, -11.480503, 0.030000, -27.716386)
+mesh = SubResource("mesh_53")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_45" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.956940, 0.000000, 0.290285, 0.000000, 1.000000, 0.000000, -0.290285, 0.000000, 0.956940, -8.708540, 0.030000, -28.708210)
+mesh = SubResource("mesh_54")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_46" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.980785, 0.000000, 0.195090, 0.000000, 1.000000, 0.000000, -0.195090, 0.000000, 0.980785, -5.852710, 0.030000, -29.423558)
+mesh = SubResource("mesh_55")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_47" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.995185, 0.000000, 0.098017, 0.000000, 1.000000, 0.000000, -0.098017, 0.000000, 0.995185, -2.940514, 0.030000, -29.855542)
+mesh = SubResource("mesh_56")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_48" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, -0.000000, 0.000000, 1.000000, -0.000000, 0.030000, -30.000000)
+mesh = SubResource("mesh_57")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_49" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.995185, -0.000000, -0.098017, 0.000000, 1.000000, 0.000000, 0.098017, 0.000000, 0.995185, 2.940514, 0.030000, -29.855542)
+mesh = SubResource("mesh_58")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_50" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.980785, -0.000000, -0.195090, 0.000000, 1.000000, 0.000000, 0.195090, 0.000000, 0.980785, 5.852710, 0.030000, -29.423558)
+mesh = SubResource("mesh_59")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_51" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.956940, -0.000000, -0.290285, 0.000000, 1.000000, 0.000000, 0.290285, 0.000000, 0.956940, 8.708540, 0.030000, -28.708210)
+mesh = SubResource("mesh_60")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_52" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.923880, -0.000000, -0.382683, 0.000000, 1.000000, 0.000000, 0.382683, 0.000000, 0.923880, 11.480503, 0.030000, -27.716386)
+mesh = SubResource("mesh_61")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_53" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.881921, -0.000000, -0.471397, 0.000000, 1.000000, 0.000000, 0.471397, 0.000000, 0.881921, 14.141902, 0.030000, -26.457638)
+mesh = SubResource("mesh_62")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_54" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.831470, -0.000000, -0.555570, 0.000000, 1.000000, 0.000000, 0.555570, 0.000000, 0.831470, 16.667107, 0.030000, -24.944088)
+mesh = SubResource("mesh_63")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_55" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.773010, -0.000000, -0.634393, 0.000000, 1.000000, 0.000000, 0.634393, 0.000000, 0.773010, 19.031799, 0.030000, -23.190314)
+mesh = SubResource("mesh_64")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_56" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.707107, -0.000000, -0.707107, 0.000000, 1.000000, 0.000000, 0.707107, 0.000000, 0.707107, 21.213203, 0.030000, -21.213203)
+mesh = SubResource("mesh_65")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_57" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.634393, -0.000000, -0.773010, 0.000000, 1.000000, 0.000000, 0.773010, 0.000000, 0.634393, 23.190314, 0.030000, -19.031799)
+mesh = SubResource("mesh_66")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_58" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.555570, -0.000000, -0.831470, 0.000000, 1.000000, 0.000000, 0.831470, 0.000000, 0.555570, 24.944088, 0.030000, -16.667107)
+mesh = SubResource("mesh_67")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_59" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.471397, -0.000000, -0.881921, 0.000000, 1.000000, 0.000000, 0.881921, 0.000000, 0.471397, 26.457638, 0.030000, -14.141902)
+mesh = SubResource("mesh_68")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_60" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.382683, -0.000000, -0.923880, 0.000000, 1.000000, 0.000000, 0.923880, 0.000000, 0.382683, 27.716386, 0.030000, -11.480503)
+mesh = SubResource("mesh_69")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_61" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.290285, -0.000000, -0.956940, 0.000000, 1.000000, 0.000000, 0.956940, 0.000000, 0.290285, 28.708210, 0.030000, -8.708540)
+mesh = SubResource("mesh_70")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_62" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.195090, -0.000000, -0.980785, 0.000000, 1.000000, 0.000000, 0.980785, 0.000000, 0.195090, 29.423558, 0.030000, -5.852710)
+mesh = SubResource("mesh_71")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Seg_63" type="MeshInstance3D" parent="Circle"]
+transform = Transform3D(0.098017, -0.000000, -0.995185, 0.000000, 1.000000, 0.000000, 0.995185, 0.000000, 0.098017, 29.855542, 0.030000, -2.940514)
+mesh = SubResource("mesh_72")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Spawn_Circle" type="Marker3D" parent="." groups=["spawn_point"]]
+transform = Transform3D(-1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, -0.000000, 0.000000, -1.000000, -70.000000, 0.400000, 100.000000)
+
+[node name="Slalom" type="Node3D" parent="."]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, -100.000000)
+metadata/spacing = 18.0
+metadata/lateral_offset = 3.0
+metadata/cone_count = 8
+
+[node name="Cone_1" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -60.000000, 0.350000, 3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_1"]
+shape = SubResource("cshape_73")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_1"]
+mesh = SubResource("cmesh_74")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Cone_2" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -42.000000, 0.350000, -3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_2"]
+shape = SubResource("cshape_75")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_2"]
+mesh = SubResource("cmesh_76")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Cone_3" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -24.000000, 0.350000, 3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_3"]
+shape = SubResource("cshape_77")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_3"]
+mesh = SubResource("cmesh_78")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Cone_4" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, -6.000000, 0.350000, -3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_4"]
+shape = SubResource("cshape_79")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_4"]
+mesh = SubResource("cmesh_80")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Cone_5" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 12.000000, 0.350000, 3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_5"]
+shape = SubResource("cshape_81")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_5"]
+mesh = SubResource("cmesh_82")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Cone_6" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 30.000000, 0.350000, -3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_6"]
+shape = SubResource("cshape_83")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_6"]
+mesh = SubResource("cmesh_84")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Cone_7" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 48.000000, 0.350000, 3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_7"]
+shape = SubResource("cshape_85")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_7"]
+mesh = SubResource("cmesh_86")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Cone_8" type="StaticBody3D" parent="Slalom"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 66.000000, 0.350000, -3.000000)
+
+[node name="Collision" type="CollisionShape3D" parent="Slalom/Cone_8"]
+shape = SubResource("cshape_87")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slalom/Cone_8"]
+mesh = SubResource("cmesh_88")
+surface_material_override/0 = SubResource("mat_cone")
+
+[node name="Spawn_Slalom" type="Marker3D" parent="." groups=["spawn_point"]]
+transform = Transform3D(0.000000, -0.000000, -1.000000, 0.000000, 1.000000, 0.000000, 1.000000, 0.000000, 0.000000, -80.000000, 0.400000, -100.000000)
+
+[node name="Slope" type="Node3D" parent="."]
+metadata/angle_deg = 10.0
+metadata/length = 40.0
+metadata/width = 10.0
+metadata/run_in = 20.0
+
+[node name="Surface" type="StaticBody3D" parent="Slope" groups=["surface_tarmac"]]
+transform = Transform3D(0.984808, -0.173648, 0.000000, 0.173648, 0.984808, 0.000000, 0.000000, 0.000000, 1.000000, 89.782979, 2.980560, 100.000000)
+metadata/surface_id = "tarmac"
+
+[node name="Collision" type="CollisionShape3D" parent="Slope/Surface"]
+shape = SubResource("shape_89")
+
+[node name="Mesh" type="MeshInstance3D" parent="Slope/Surface"]
+mesh = SubResource("mesh_90")
+surface_material_override/0 = SubResource("mat_tarmac_patch")
+
+[node name="Spawn_Slope" type="Marker3D" parent="." groups=["spawn_point"]]
+transform = Transform3D(0.000000, -0.000000, -1.000000, 0.000000, 1.000000, 0.000000, 1.000000, 0.000000, 0.000000, 50.000000, 0.400000, 100.000000)
+
+[node name="Jump" type="Node3D" parent="."]
+metadata/angle_deg = 12.0
+metadata/rise = 1.0
+metadata/landing_length = 30.0
+
+[node name="Ramp" type="StaticBody3D" parent="Jump" groups=["surface_tarmac"]]
+transform = Transform3D(0.000000, -0.000000, -1.000000, 0.207912, 0.978148, 0.000000, 0.978148, -0.207912, 0.000000, 130.000000, 0.010926, -97.543729)
+metadata/surface_id = "tarmac"
+
+[node name="Collision" type="CollisionShape3D" parent="Jump/Ramp"]
+shape = SubResource("shape_91")
+
+[node name="Mesh" type="MeshInstance3D" parent="Jump/Ramp"]
+mesh = SubResource("mesh_92")
+surface_material_override/0 = SubResource("mat_tarmac_patch")
+
+[node name="Landing" type="MeshInstance3D" parent="Jump"]
+transform = Transform3D(1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 130.000000, 0.030000, -80.295370)
+mesh = SubResource("mesh_93")
+surface_material_override/0 = SubResource("mat_landing")
+
+[node name="Spawn_Jump" type="Marker3D" parent="." groups=["spawn_point"]]
+transform = Transform3D(-1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, -0.000000, 0.000000, -1.000000, 130.000000, 0.400000, -150.000000)
