@@ -9,6 +9,7 @@ const ACTION_DUMP := &"dump_telemetry"
 const VECTOR_SCALE := 0.0004 ## m of arrow per N
 
 @export var recorder: TelemetryRecorder
+@export var start_visible := false ## F1 toggles at runtime
 
 var _label: Label
 var _panel: PanelContainer
@@ -20,7 +21,7 @@ var _has_ui := false
 
 func _ready() -> void:
 	layer = 100
-	visible = false
+	visible = start_visible
 	# Headless (CI/tests) has no fonts: building Controls there only spams engine errors.
 	_has_ui = DisplayServer.get_name() != "headless"
 	if _has_ui:
@@ -105,8 +106,13 @@ func _build_panel() -> void:
 	if v != null:
 		if v.definition == null:
 			v.definition = Vehicle.DEFAULT_DEFINITION
+		# Panel edits must never mutate the shared preloaded/on-disk Resources: own a copy.
+		if v.definition.resource_path != "":
+			v.definition = v.definition.duplicate()
 		if v.tire_params == null:
 			v.tire_params = TireParams.new()
+		elif v.tire_params.resource_path != "":
+			v.tire_params = v.tire_params.duplicate()
 		_add_param(box, v.definition, "spring_rate", 1000.0, 120000.0, 500.0)
 		_add_param(box, v.definition, "damper_bump", 0.0, 8000.0, 50.0)
 		_add_param(box, v.definition, "damper_rebound", 0.0, 8000.0, 50.0)
