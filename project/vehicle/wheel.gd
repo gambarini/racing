@@ -1,0 +1,42 @@
+## One raycast wheel: probes the ground and exposes per-wheel contact data (for #9, #10, #15).
+## Sim only: no meshes, audio or camera. Probing uses the physics space directly (deterministic).
+class_name Wheel
+extends Node3D
+
+var is_grounded := false
+var contact_point := Vector3.ZERO ## world
+var contact_normal := Vector3.UP
+var compression := 0.0 ## m, 0 = full droop
+var compression_rate := 0.0 ## m/s, + = compressing
+var fz := 0.0 ## N, force along the suspension axis
+var surface_id: StringName = &"default"
+var hit_distance := INF ## mount-to-ground along the ray (>= radius means hub clear of chassis)
+
+# Static-hold stub state (see VehicleDefinition hold_*).
+var hold_anchor := Vector3.ZERO
+var hold_valid := false
+
+var radius := 0.32
+var travel := 0.2
+
+
+## Ray from the mount down the body's -Y axis; fills the contact fields except forces.
+func probe(space: PhysicsDirectSpaceState3D, exclude: Array[RID], body_down: Vector3) -> void:
+	var from := global_position
+	var q := PhysicsRayQueryParameters3D.create(from, from + body_down * (travel + radius), 1, exclude)
+	var hit := space.intersect_ray(q)
+	if hit.is_empty():
+		is_grounded = false
+		compression = 0.0
+		compression_rate = 0.0
+		hit_distance = INF
+		hold_valid = false
+		fz = 0.0
+		return
+	is_grounded = true
+	contact_point = hit.position
+	contact_normal = hit.normal
+	hit_distance = from.distance_to(hit.position)
+	compression = clampf(travel - (hit_distance - radius), 0.0, travel)
+	var col: Object = hit.collider
+	surface_id = col.get_meta(&"surface_id", &"default") if col != null else &"default"
