@@ -1,6 +1,7 @@
 ## Data-driven car description (Tech Architecture: /vehicle/definitions). Defaults are the
 ## M1 reference car from wiki "Vehicle Physics Design"; they are starting values, tuned in #15.
-## Frame: body origin is on the ground at design ride height, mid-wheelbase; forward is -Z.
+## Frame: body origin is on the ground at design ride height, mid-wheelbase.
+## Axis convention: sim forward is -Z; model nose is +Z; VehicleVisual rotates 180 deg.
 class_name VehicleDefinition
 extends Resource
 
