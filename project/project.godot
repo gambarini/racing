@@ -48,5 +48,6 @@ dump_telemetry={
 [physics]
 
 3d/physics_engine="Jolt Physics"
+jolt_physics_3d/simulation/penetration_slop=0.005
 common/physics_ticks_per_second=120
 common/physics_interpolation=true
