@@ -16,4 +16,4 @@ Pre-production. The first goal is **M1 — Driving-feel prototype**: one car on 
 4. Models and animation are made in Blender (`art-source/`) and exported as `.glb` — see [Art Pipeline (Blender)](https://github.com/gambarini/racing/wiki/Art-Pipeline-Blender).
 
 ## Repository layout
-See [Tech Architecture](https://github.com/gambarini/racing/wiki/Tech-Architecture).
+See [Tech Architecture](https://github.com/gambarini/racing/wiki/Tech-Architecture). Conventions, PR checklist and test expectations: [CONTRIBUTING.md](CONTRIBUTING.md).
