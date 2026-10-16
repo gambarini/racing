@@ -41,7 +41,7 @@ Order:
 2. Then by `milestone_order`, then `priority:high` first, then issue number ascending.
 Skip issues labelled `blocked`, `needs:split` (the split children are in the queue), issues already in flight, and milestone `Later (optional)`.
 
-**Board sync:** on each queue refresh, add open issues that are missing from the Project, except the "Build session log" issue (agents should add the ones they create, but check): compare the issue numbers with `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[].content.number]'`, then `gh project item-add <number> --owner <owner> --url <issue url>` and cache the new item id in `project_items`.
+**Board sync:** on each queue refresh, add open issues that are missing from the Project (agents should add the ones they create, but check): compare the issue numbers with `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[].content.number]'`, then `gh project item-add <number> --owner <owner> --url <issue url>` and cache the new item id in `project_items`.
 
 **Role for an item:** first matching `role_by_label` entry by its `area:*` labels, else `default`. `area:design` items go to `game-designer` directly.
 
@@ -95,8 +95,12 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 - **WIND_DOWN** (watchdog or rule): stop dispatching new items. Let in-flight build agents finish; run QA/merge only if it fits before `end_at`.
 - **HARD_STOP** at `end_at`: `TaskStop` every in-flight agent (they have committed WIP). For each unfinished item: make sure its branch is pushed (if policy allows), leave the PR as draft, comment on the issue with where it stopped (one paragraph, from the agent's last report), keep Project Status = In Progress.
 - Kill the remaining watchdog/cooldown background tasks.
-- Write the **session report** to `<state_dir>/reports/session-<date>.md` and post a condensed copy as a comment on a pinned "Build session log" issue (create it once, label `area:infra`): start/end, items merged (#, PR), items in progress, QA-found issues created, blocked items with reason, usage used (5-hour Δ, weekly Δ), cost calibration table, recommendations for next session.
-- Final message to the user: ≤12 lines summary + link to the log comment.
+- Write the **session report** to `<state_dir>/reports/session-<date>.md`: start/end, items merged (#, PR), items in progress, QA-found issues created, blocked items with reason, usage used (5-hour Δ, weekly Δ), cost calibration table, recommendations for next session. Publish it to the wiki:
+  1. Clone `wiki_git` into a temp dir and run `git config commit.gpgsign false` there (wiki commits are unsigned).
+  2. Write the report as `Build-Session-<date>.md` (add `-2`, `-3` for a second session the same day). Write issue/PR refs as links (`[#n](https://github.com/<repo>/issues/n)`), because wiki pages don't auto-link `#n`.
+  3. Add one row at the top of the table in `Build-Sessions.md`: date, duration, merged count, one-line highlights, `[[Build Session <date>]]`.
+  4. Commit and push. If the push is rejected (a designer pushed meanwhile), `git pull --rebase` and push again, up to 3 times.
+- Final message to the user: ≤12 lines summary + link to the wiki session page (`<wiki_url>/Build-Session-<date>`).
 
 ## 6. Keeping the orchestrator alive and lean (long runs)
 - **Never** read diffs, source files, long logs or full reports in this session. Agents' final messages are ≤10 lines; read an agent's full notes only when a decision needs it, and then only the first 40 lines (`gh pr view <pr> --json body --jq .body | head -40`, or `--json comments --jq '.comments[-1].body'`).
