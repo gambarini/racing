@@ -2,6 +2,7 @@
 ## no meshes, audio or camera. Suspension runs in _physics_process at the fixed 120 Hz tick.
 ## Tire forces (#9 combined slip, #10 wheel spin, #74 lateral Fy) act on the body at the contact
 ## patches; the old `static_hold` stub is gone. A parked car holds on a slope via brake torque.
+## Axis convention: sim forward is -Z; model nose is +Z; VehicleVisual rotates 180 deg.
 class_name Vehicle
 extends RigidBody3D
 

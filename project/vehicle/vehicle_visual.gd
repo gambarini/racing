@@ -1,7 +1,8 @@
 ## Binds the blockout car glb to a Vehicle by node name (#57). Visual only: it reads Wheel state
 ## (omega, steer_angle, contact) and never writes to the sim. Add as a child of the Vehicle.
-## Frames: the Vehicle drives toward -Z, the glb noses toward +Z, so the model root is turned
-## 180 degrees about Y. All wheel maths below is in the model frame (nose +Z).
+## Axis convention: sim forward is -Z; model nose is +Z; VehicleVisual rotates 180 deg.
+## This is the single adapter: only `model_root` is turned (rotation.y = PI). All wheel maths
+## below is in the model frame (nose +Z).
 class_name VehicleVisual
 extends Node3D
 
