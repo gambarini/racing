@@ -26,8 +26,9 @@ Thumbs.db
 *.blend2
 *.blend@
 
-# Build session runtime state and reports
+# Build session runtime state and reports; agent worktrees
 .build/
+.claude/worktrees/
 
 # Policy: commit *.import and *.uid files (Godot 4.4+); only the .godot/ cache is ignored.
 
