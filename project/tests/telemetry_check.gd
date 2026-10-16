@@ -72,9 +72,6 @@ func run(rec: TelemetryRecorder) -> void:
 			if n.ends_with("_surface"):
 				if cells[c] != "default":
 					surf_ok = false
-			elif n.ends_with("_alpha") or n.ends_with("_fy"):
-				if cells[c] != "":
-					bad += 1
 			elif not cells[c].is_valid_float():
 				bad += 1
 	check(bad == 0, "all provided channels parse as floats; n/a channels empty (bad=%d)" % bad)

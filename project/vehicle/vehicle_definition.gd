@@ -34,11 +34,6 @@ extends Resource
 ## (about travel minus static compression), so the hub can never enter the chassis.
 @export var chassis_bottom := 0.10
 
-@export_group("Stub: static hold (replaced by brakes/tire in #9/#10)")
-@export var hold_friction_mu := 1.0
-@export var hold_stiffness := 20000.0 ## N/m anchor spring per wheel
-@export var hold_damping := 2000.0 ## Ns/m per wheel
-
 
 func front_axle_z() -> float:
 	return -wheelbase * 0.5

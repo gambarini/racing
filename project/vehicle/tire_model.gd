@@ -64,8 +64,10 @@ static func relax(slip: float, target: float, vx: float, dt: float, p: TireParam
 
 ## Integrator guard for the caller (#8/#10): a force that opposes velocity `v` must not reverse it
 ## within one step, otherwise explicit integration chatters near rest. `mass` is the effective
-## mass the wheel force acts on. Returns the force clamped to |F| <= mass*|v|/dt when opposing v.
-static func limit_to_stop(force: float, v: float, mass: float, dt: float) -> float:
+## mass the wheel force acts on; `push` is the signed other force on that mass along the same axis
+## (e.g. gravity's slope component) which the tire must also cancel to stop the motion. Returns
+## the force clamped to |F| <= max(0, mass*|v|/dt + push*sign(v)) when opposing v.
+static func limit_to_stop(force: float, v: float, mass: float, dt: float, push := 0.0) -> float:
 	if force * v >= 0.0:
 		return force
-	return signf(force) * minf(absf(force), mass * absf(v) / dt)
+	return signf(force) * minf(absf(force), maxf(mass * absf(v) / dt + push * signf(v), 0.0))
