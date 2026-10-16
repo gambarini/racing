@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dfaxjxo6gx7d4"
-path="res://.godot/imported/GutIconV2_no_shine.png-340880100fb7bae1a2e0530330841e58.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://addons/gut/images/GutIconV2_no_shine.png"
-dest_files=["res://.godot/imported/GutIconV2_no_shine.png-340880100fb7bae1a2e0530330841e58.ctex"]
 
 [params]
 

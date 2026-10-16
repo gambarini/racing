@@ -3,15 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dx0yxxn5q7doc"
-path="res://.godot/imported/eyey.png-e0a721ab6b749f5d493d61e9f27f0654.ctex"
-metadata={
-"vram_texture": false
-}
+valid=false
 
 [deps]
 
 source_file="res://addons/gut/images/eyey.png"
-dest_files=["res://.godot/imported/eyey.png-e0a721ab6b749f5d493d61e9f27f0654.ctex"]
 
 [params]
 

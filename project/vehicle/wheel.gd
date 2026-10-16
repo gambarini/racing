@@ -16,6 +16,14 @@ var hit_distance := INF ## mount-to-ground along the ray (>= radius means hub cl
 var hold_anchor := Vector3.ZERO
 var hold_valid := false
 
+# Spin state (#10). omega is integrated only by Vehicle._physics_process via WheelSpin.
+var omega := 0.0 ## rad/s, + = rolling forward
+var kappa := 0.0 ## slip ratio fed to the tire model (relaxed)
+var fx := 0.0 ## N, longitudinal tire force actually applied (after the stop limiter)
+var drive_torque := 0.0 ## Nm input from the powertrain (#11), + = forward
+var brake_torque := 0.0 ## Nm input, magnitude >= 0
+var handbrake_gain := 0.0 ## 1 on rear wheels, 0 on front
+
 var radius := 0.32
 var travel := 0.2
 

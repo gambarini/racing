@@ -15,6 +15,8 @@ extends Resource
 
 @export_group("Wheel")
 @export var wheel_radius := 0.32 ## m
+@export var wheel_inertia := 1.2 ## kg m^2 per wheel (rim, tire, brake disc)
+@export var handbrake_torque := 3000.0 ## Nm on each rear wheel while the handbrake is applied
 
 @export_group("Suspension")
 @export var spring_rate := 30000.0 ## N/m per wheel
