@@ -13,6 +13,11 @@ const DEFAULT_DEFINITION := preload("res://vehicle/definitions/reference_car.tre
 ## Stub brake: anchors each grounded wheel in the ground plane (friction-capped). See #9/#10.
 @export var static_hold := false
 
+## Apply tire longitudinal force Fx to the body. Off by default so the #8 suspension checks and
+## static_hold stay valid; omega still integrates (reaction torque uses the same Fx).
+@export var tire_forces_enabled := false
+@export var handbrake := false
+@export var tire_params: TireParams
 var wheels: Array[Wheel] = []
 var _exclude: Array[RID] = []
 var _g := 9.81
@@ -51,12 +56,48 @@ func _build_wheels() -> void:
 		w.position = definition.mount_position(i, _g)
 		w.radius = definition.wheel_radius
 		w.travel = definition.travel
+		w.handbrake_gain = 1.0 if i >= 2 else 0.0
 		add_child(w)
 		wheels.append(w)
 
 
 func _physics_process(delta: float) -> void:
 	step_suspension(delta)
+	step_wheels(delta)
+
+
+## Integrate wheel spin and (optionally) apply longitudinal tire force. Fixed tick only.
+func step_wheels(delta: float) -> void:
+	if tire_params == null:
+		tire_params = TireParams.new()
+	var d := definition
+	for w in wheels:
+		var vx := 0.0
+		var fx_body := 0.0
+		var fwd := Vector3.ZERO
+		var brake := w.brake_torque + (d.handbrake_torque * w.handbrake_gain if handbrake else 0.0)
+		if w.is_grounded:
+			var n := w.contact_normal
+			fwd = -global_transform.basis.z
+			fwd = (fwd - n * fwd.dot(n)).normalized()
+			vx = _point_velocity(w.contact_point).dot(fwd)
+			var target := TireModel.slip_ratio(w.omega, w.radius, vx, tire_params)
+			w.kappa = TireModel.relax(w.kappa, target, vx, delta, tire_params)
+			var fx0 := TireModel.compute(w.kappa, 0.0, w.fz, tire_params).x
+			var sl := WheelSpin.fx_slopes(w.kappa, w.omega, vx, w.fz, w.radius, vx, delta, tire_params)
+			fx_body = WheelSpin.implicit_fx(fx0, sl.x, sl.y, w.drive_torque, w.radius,
+					d.wheel_inertia, mass * 0.25, delta)
+			# Grip must not reverse the car within a tick (a quarter of the mass per wheel).
+			fx_body = TireModel.limit_to_stop(fx_body, vx, mass * 0.25, delta)
+			w.omega = WheelSpin.step(w.omega, w.drive_torque, brake, fx_body, w.radius,
+					d.wheel_inertia, delta)
+		else:
+			w.kappa = 0.0
+			w.omega = WheelSpin.step(w.omega, w.drive_torque, brake, 0.0, w.radius,
+					d.wheel_inertia, delta)
+		w.fx = fx_body
+		if tire_forces_enabled and w.is_grounded:
+			apply_force(fwd * fx_body, w.contact_point - global_position)
 
 
 ## Probe, compute and apply all suspension forces for one tick.
