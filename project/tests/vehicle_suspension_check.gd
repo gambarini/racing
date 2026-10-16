@@ -120,7 +120,7 @@ func test_settle_and_split() -> void:
 	check(absf(share - expect) < 0.02, "front-axle load share matches CoM")
 	var w: Wheel = v.wheels[0]
 	check(w.is_grounded and w.contact_normal.is_equal_approx(Vector3.UP) and w.compression > 0.0
-			and w.fz > 0.0 and w.surface_id == &"default", "per-wheel contact info exposed")
+			and w.fz > 0.0 and w.surface_id == &"tarmac", "per-wheel contact info exposed")
 	root.free()
 	await step(1)
 

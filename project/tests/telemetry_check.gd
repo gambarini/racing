@@ -70,7 +70,7 @@ func run(rec: TelemetryRecorder) -> void:
 		for c in cells.size():
 			var n := header[c]
 			if n.ends_with("_surface"):
-				if cells[c] != "default":
+				if cells[c] != "tarmac":
 					surf_ok = false
 			elif not cells[c].is_valid_float():
 				bad += 1
