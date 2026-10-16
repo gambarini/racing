@@ -79,8 +79,6 @@ func test_dump_three_second_run() -> void:
 			var name := header[c]
 			if name.ends_with("_surface"):
 				assert_ne(cells[c], "NaN")
-			elif name.ends_with("_alpha") or name.ends_with("_fy"):
-				assert_eq(cells[c], "", "not-yet-available channel is empty")
 			else:
 				assert_true(cells[c].is_valid_float(), "%s row %d = '%s'" % [name, i, cells[c]])
 	DirAccess.remove_absolute(path)

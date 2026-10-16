@@ -69,9 +69,9 @@ func record(dt: float) -> void:
 		var w: Wheel = vehicle.wheels[i]
 		r[TelemetrySchema.wheel_col(i, 0)] = w.fz
 		r[TelemetrySchema.wheel_col(i, 1)] = w.kappa
-		r[TelemetrySchema.wheel_col(i, 2)] = NAN # slip angle: no lateral model yet
+		r[TelemetrySchema.wheel_col(i, 2)] = w.alpha
 		r[TelemetrySchema.wheel_col(i, 3)] = w.fx
-		r[TelemetrySchema.wheel_col(i, 4)] = NAN # Fy: no lateral model yet
+		r[TelemetrySchema.wheel_col(i, 4)] = w.fy
 		r[TelemetrySchema.wheel_col(i, 5)] = w.compression
 		r[TelemetrySchema.wheel_col(i, 6)] = w.omega * 60.0 / TAU
 		r[TelemetrySchema.wheel_col(i, 7)] = float(_surface_index(w.surface_id)) if w.is_grounded else -1.0

@@ -172,6 +172,7 @@ func peak_roll(arb: bool) -> float:
 	var root := make_world()
 	var v := spawn(root, Transform3D(Basis.IDENTITY, Vector3(0, 0.0, 0)))
 	v.arb_enabled = arb
+	v.tire_forces_enabled = false # this test emulates its own ground reaction
 	await step(3 * 120)
 	var com_w := v.global_position + v.global_transform.basis * v.center_of_mass
 	var fl := 0.5 * v.mass * g
@@ -203,7 +204,8 @@ func test_slope() -> void:
 	var root := make_world(10.0)
 	var b := Basis(Vector3.RIGHT, tilt) # ground tilted the same way: forward (-Z) rises
 	var v := spawn(root, Transform3D(b, b.y * 0.01))
-	v.static_hold = true
+	for w in v.wheels:
+		w.brake_torque = 4000.0 # parked: brakes on, grip comes from the tire model
 	var p0 := v.global_position
 	var vmax := 0.0
 	for i in 5 * 120:
