@@ -218,6 +218,27 @@ func test_slope() -> void:
 	check(vmax < 0.02, "no jitter on slope: |v_normal| < 0.02 m/s")
 	root.free()
 	await step(1)
+	await test_slope_30s(tilt)
+
+
+## #85: a parked, braked car on a 10 deg slope must not creep: < 1 mm drift over 30 s once settled.
+func test_slope_30s(tilt: float) -> void:
+	var root := make_world(10.0)
+	var b := Basis(Vector3.RIGHT, tilt)
+	var v := spawn(root, Transform3D(b, b.y * 0.01))
+	for w in v.wheels:
+		w.brake_torque = 4000.0
+	await step(3 * 120) # settle: suspension + anchor deflection
+	var p1 := v.global_position
+	var vmax := 0.0
+	for i in 30 * 120:
+		await step(1)
+		vmax = maxf(vmax, v.linear_velocity.length())
+	var drift := v.global_position.distance_to(p1)
+	print("telemetry static hold: drift over 30 s=%.5f m, max speed=%.5f" % [drift, vmax])
+	check(drift < 0.001, "static friction: < 1 mm drift in 30 s on 10 deg slope (%.5f m)" % drift)
+	root.free()
+	await step(1)
 
 
 func test_perf() -> void:

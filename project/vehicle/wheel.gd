@@ -22,6 +22,8 @@ var fx := 0.0 ## N, longitudinal tire force actually applied (after the stop lim
 var drive_torque := 0.0 ## Nm input from the powertrain (#11), + = forward
 var brake_torque := 0.0 ## Nm input, magnitude >= 0
 var handbrake_gain := 0.0 ## 1 on rear wheels, 0 on front
+var anchored := false ## static-friction stage (#85) is holding this wheel at `anchor`
+var anchor := Vector3.ZERO ## world contact point latched when the wheel came to rest
 
 var radius := 0.32
 var travel := 0.2

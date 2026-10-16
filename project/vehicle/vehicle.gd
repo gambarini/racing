@@ -126,29 +126,52 @@ func step_wheels(delta: float) -> void:
 			w.kappa = TireModel.relax(w.kappa, target, vx, delta, tp)
 			var target_a := TireModel.slip_angle(vx, vy, tp)
 			w.alpha = TireModel.relax(w.alpha, target_a, vx, delta, tp)
-			# Gravity's slope components: part of what the tire must cancel to hold/stop the car.
-			var gv := Vector3.DOWN * _g * wheel_mass
-			var push_x := gv.dot(fwd)
-			var push_y := gv.dot(right)
-			var f0 := TireModel.compute(w.kappa, w.alpha, w.fz, tp)
-			var sl := WheelSpin.fx_slopes(w.kappa, w.omega, vx, w.fz, w.radius, vx, delta,
-					tp, w.alpha)
-			fx_body = WheelSpin.implicit_fx(f0.x, sl.x, sl.y, w.drive_torque, w.radius,
-					d.wheel_inertia, wheel_mass, delta, push_x)
-			# A braked wheel that stays locked cannot spin up, so its slope must not soften the
-			# force (otherwise a parked car creeps); re-solve with a rigid wheel.
-			if brake > 0.0 and WheelSpin.step(w.omega, w.drive_torque, brake, fx_body, w.radius,
-					d.wheel_inertia, delta) == 0.0:
-				fx_body = WheelSpin.implicit_fx(f0.x, 0.0, sl.y, w.drive_torque, w.radius,
+			var f_max := TireModel.peak_force(w.fz, tp)
+			var held := false
+			# Static stage (#85): a locked, braked wheel at (near) rest is anchored to the ground.
+			var speed_t := Vector2(vx, vy).length()
+			if brake > 0.0 and w.drive_torque == 0.0 and speed_t < StaticFriction.RELEASE_SPEED:
+				if not w.anchored and w.omega == 0.0 and speed_t < StaticFriction.ENGAGE_SPEED:
+					w.anchored = true
+					w.anchor = w.contact_point
+				if w.anchored:
+					var dv := w.contact_point - w.anchor
+					dv -= n * dv.dot(n)
+					var fh := StaticFriction.hold_force(Vector2(dv.dot(fwd), dv.dot(right)),
+							Vector2(vx, vy), wheel_mass, f_max)
+					if StaticFriction.saturated(fh, f_max):
+						w.anchored = false
+					else:
+						fx_body = fh.x
+						fy_body = fh.y
+						held = true
+			else:
+				w.anchored = false
+			if not held:
+				# Gravity's slope components: part of what the tire must cancel to hold/stop the car.
+				var gv := Vector3.DOWN * _g * wheel_mass
+				var push_x := gv.dot(fwd)
+				var push_y := gv.dot(right)
+				var f0 := TireModel.compute(w.kappa, w.alpha, w.fz, tp)
+				var sl := WheelSpin.fx_slopes(w.kappa, w.omega, vx, w.fz, w.radius, vx, delta,
+						tp, w.alpha)
+				fx_body = WheelSpin.implicit_fx(f0.x, sl.x, sl.y, w.drive_torque, w.radius,
 						d.wheel_inertia, wheel_mass, delta, push_x)
-			var sy := WheelSpin.fy_slope(w.kappa, w.alpha, vx, vy, w.fz, delta, tp)
-			fy_body = WheelSpin.implicit_fy(f0.y, sy, wheel_mass, delta, push_y)
-			# Grip must not reverse the car within a tick.
-			fx_body = TireModel.limit_to_stop(fx_body, vx, wheel_mass, delta, push_x)
-			fy_body = TireModel.limit_to_stop(fy_body, vy, wheel_mass, delta, push_y)
+				# A braked wheel that stays locked cannot spin up, so its slope must not soften the
+				# force (otherwise a parked car creeps); re-solve with a rigid wheel.
+				if brake > 0.0 and WheelSpin.step(w.omega, w.drive_torque, brake, fx_body, w.radius,
+						d.wheel_inertia, delta) == 0.0:
+					fx_body = WheelSpin.implicit_fx(f0.x, 0.0, sl.y, w.drive_torque, w.radius,
+							d.wheel_inertia, wheel_mass, delta, push_x)
+				var sy := WheelSpin.fy_slope(w.kappa, w.alpha, vx, vy, w.fz, delta, tp)
+				fy_body = WheelSpin.implicit_fy(f0.y, sy, wheel_mass, delta, push_y)
+				# Grip must not reverse the car within a tick.
+				fx_body = TireModel.limit_to_stop(fx_body, vx, wheel_mass, delta, push_x)
+				fy_body = TireModel.limit_to_stop(fy_body, vy, wheel_mass, delta, push_y)
 			w.omega = WheelSpin.step(w.omega, w.drive_torque, brake, fx_body, w.radius,
 					d.wheel_inertia, delta)
 		else:
+			w.anchored = false
 			w.kappa = 0.0
 			w.alpha = 0.0
 			w.omega = WheelSpin.step(w.omega, w.drive_torque, brake, 0.0, w.radius,
