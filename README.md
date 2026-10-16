@@ -4,7 +4,7 @@ A 3D off-road racing game: wheel-to-wheel packs of cars on dirt, gravel, mud and
 
 - **Engine:** Godot 4 · **Platform:** PC · **Mode:** single-player vs AI (multiplayer later)
 - **Design docs / GDD:** [Wiki](https://github.com/gambarini/racing/wiki) — start with [Vision and Pillars](https://github.com/gambarini/racing/wiki/Vision-and-Pillars)
-- **Roadmap:** [GitHub Project](https://github.com/users/gambarini/projects) · [Milestones](https://github.com/gambarini/racing/milestones)
+- **Roadmap:** [GitHub Project "Racing Roadmap"](https://github.com/users/gambarini/projects/2) · [Milestones](https://github.com/gambarini/racing/milestones)
 
 ## Where we are
 Pre-production. The first goal is **M1 — Driving-feel prototype**: one car on a test pad with tarmac, gravel and mud patches, a custom tire model and a telemetry overlay. Everything else builds outward from a car that is fun to drive.
