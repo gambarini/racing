@@ -14,6 +14,7 @@ func _initialize() -> void:
 	if args.size() > 0:
 		out = args[0]
 	var root: Node = load(SCENE).instantiate()
+	(root.get_node("TelemetryOverlay") as TelemetryOverlay).start_visible = true
 	get_root().add_child(root)
 	run(root, out)
 
@@ -21,9 +22,11 @@ func _initialize() -> void:
 func run(root: Node, out: String) -> void:
 	var v: Vehicle = root.get_node("Vehicle")
 	var ov: TelemetryOverlay = root.get_node("TelemetryOverlay")
-	ov.visible = true
-	for i in 480: # 4 s at 120 Hz
+	ov.visible = true # _ready may not have run yet
+	for i in 300: # 2.5 s at 120 Hz
 		var t := float(i) / 120.0
+		if i == 240: # steering is not wired into the sim yet (#82): kick sideways to provoke slip, so Fy shows
+			v.linear_velocity += v.global_transform.basis.x * 2.5
 		for j in v.wheels.size():
 			var w: Wheel = v.wheels[j]
 			w.drive_torque = 350.0 if j >= 2 else 0.0
@@ -32,6 +35,7 @@ func run(root: Node, out: String) -> void:
 		await physics_frame
 	await process_frame
 	await process_frame
+	print("overlay visible=", ov.visible, " label=", ov._label.text.left(60) if ov._label else "none")
 	var img := get_root().get_texture().get_image()
 	var err := img.save_png(out)
 	print("saved ", ProjectSettings.globalize_path(out) if out.begins_with("user://") else out, " err=", err)
