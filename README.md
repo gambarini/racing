@@ -17,3 +17,12 @@ Pre-production. The first goal is **M1 — Driving-feel prototype**: one car on 
 
 ## Repository layout
 See [Tech Architecture](https://github.com/gambarini/racing/wiki/Tech-Architecture). Conventions, PR checklist and test expectations: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Running tests
+Tests use [GUT](https://github.com/bitwes/Gut) **v9.6.1** (pinned), installed at `project/addons/gut` and enabled in `project.godot`. Tests live in `project/tests/` as `test_<subject>.gd`.
+
+```
+godot --headless --path project --import --quit      # once after a fresh clone
+godot --headless --path project -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
+```
+Exit code is 0 when all tests pass, non-zero otherwise. CI (#4) calls the same command. On macOS, `godot` is `/Applications/Godot.app/Contents/MacOS/Godot`.
