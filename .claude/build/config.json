@@ -3,7 +3,7 @@
   "main_checkout": "/Users/gambarini/Projects/racing",
   "base_branch": "main",
   "state_dir": "/Users/gambarini/Projects/racing/.build",
-  "wiki_git": "git@github.com:gambarini/racing.wiki.git",
+  "wiki_git": "https://github.com/gambarini/racing.wiki.git",
   "wiki_url": "https://github.com/gambarini/racing/wiki",
 
   "project": {
