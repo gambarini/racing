@@ -49,11 +49,11 @@ func run() -> void:
 			print("t=", i, " y=", rb.global_position.y, " vy=", rb.linear_velocity.y)
 	var rest_y := rb.global_position.y - 0.5 # bottom face height above floor surface
 	print("rest height above surface (m) = ", rest_y)
-	# Jolt's default penetration slop (2 cm) lets resting bodies sink up to that far; see ADR 001.
-	# Tuning it is out of scope for #2, so the tolerance is slop + 1 mm. Rest must also be stable.
+	# project.godot lowers Jolt penetration_slop to 5 mm (default 2 cm); see ADR 001.
 	var slop: float = ProjectSettings.get_setting("physics/jolt_physics_3d/simulation/penetration_slop", 0.02)
 	print("penetration_slop = ", slop)
-	check(absf(rest_y) <= slop + 0.001, "box rests within penetration slop (+1 mm) of surface after 2 s")
+	check(is_equal_approx(slop, 0.005), "penetration_slop is 5 mm")
+	check(absf(rest_y) <= 0.01, "box rests within 1 cm of surface after 2 s")
 	check(absf(rb.linear_velocity.y) < 0.01, "box is at rest")
 
 	var space := root.get_world_3d().direct_space_state
