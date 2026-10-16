@@ -1,5 +1,5 @@
 ## Tire model parameters (data-driven; reference values from wiki "Vehicle Physics Design").
-## Surface-specific sets arrive in M2; this is the single dry-asphalt set for M1.
+## Surface variants are derived with for_surface() from this reference (dry tarmac) set.
 class_name TireParams
 extends Resource
 
@@ -15,3 +15,16 @@ extends Resource
 @export var relaxation_length := 0.3 ## m, slip lags the target over this rolled distance
 @export var low_speed_floor := 0.5 ## m/s, slip-defining speed never drops below this
 @export var min_relax_rate := 2000.0 ## 1/s, floor on the slip lag rate: at near-zero speed slip tracks its target instantly (no lag-induced ringing)
+
+
+## Pure: the tire as it behaves on `surface` (multipliers relative to this reference tire).
+## A null or neutral surface returns `base` itself, so tarmac output is bit-identical.
+static func for_surface(base: TireParams, surface: SurfaceDefinition) -> TireParams:
+	if surface == null or surface.is_neutral():
+		return base
+	var p: TireParams = base.duplicate()
+	p.mu_peak = base.mu_peak * surface.peak_mu_scale
+	p.mu_slide = base.mu_slide * surface.slide_mu_scale
+	p.kappa_peak = base.kappa_peak * surface.peak_slip_scale
+	p.alpha_peak = base.alpha_peak * surface.peak_slip_scale
+	return p

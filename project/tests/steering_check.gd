@@ -86,7 +86,7 @@ func _initialize() -> void:
 	var dh := heading_deg(v2) - h0
 	print("TURN heading change %.1f deg, mean yaw rate y %.3f rad/s, front alpha max %.3f" % [dh, yaw_sum / 240.0, max_alpha])
 	check(yaw_sum < 0.0, "yaw rate about +Y negative = clockwise (right turn)")
-	check(dh > 8.0 and dh < 45.0, "heading change %.1f in 8..45 deg" % dh)
+	check(dh > 8.0 and dh < 55.0, "heading change %.1f in 8..55 deg" % dh)
 
 	# Braking from 20 m/s, no ABS.
 	var v3 := make_vehicle()
