@@ -15,6 +15,10 @@ const DEFAULT_DEFINITION := preload("res://vehicle/definitions/reference_car.tre
 ## this off; omega still integrates (reaction torque uses the same Fx).
 @export var tire_forces_enabled := true
 @export var handbrake := false
+## Driver commands (set by apply_input; #11 powertrain reads `throttle`).
+var steer := 0.0 ## -1..1, + = right
+var throttle := 0.0 ## 0..1
+var brake := 0.0 ## 0..1
 @export var tire_params: TireParams
 var wheels: Array[Wheel] = []
 var _exclude: Array[RID] = []
@@ -28,6 +32,25 @@ func _ready() -> void:
 	_apply_definition()
 	_build_wheels()
 	_exclude = [get_rid()]
+
+
+## Copies a DriverInputState into the vehicle (clamped) and sets steer angles and brake torques.
+func apply_input(input: DriverInputState) -> void:
+	steer = clampf(input.steer, -1.0, 1.0)
+	throttle = clampf(input.throttle, 0.0, 1.0)
+	brake = clampf(input.brake, 0.0, 1.0)
+	handbrake = input.handbrake
+	var d := definition if definition != null else DEFAULT_DEFINITION
+	if wheels.size() < 4:
+		return
+	var angles := SteeringMath.wheel_angles(steer, deg_to_rad(d.max_steer_angle), d.ackermann_factor,
+			d.wheelbase, d.track)
+	wheels[0].steer_angle = angles.x
+	wheels[1].steer_angle = angles.y
+	wheels[2].steer_angle = 0.0
+	wheels[3].steer_angle = 0.0
+	for i in 4:
+		wheels[i].brake_torque = brake * (d.brake_torque_front if i < 2 else d.brake_torque_rear)
 
 
 func _apply_definition() -> void:
@@ -80,6 +103,9 @@ func step_wheels(delta: float) -> void:
 			var n := w.contact_normal
 			fwd = -global_transform.basis.z
 			fwd = (fwd - n * fwd.dot(n)).normalized()
+			# Steered wheel: rotate the forward axis about the normal (+ steer_angle = right turn,
+			# which is a negative rotation about +Y).
+			fwd = fwd.rotated(n, -w.steer_angle)
 			right = fwd.cross(n).normalized()
 			var vel := _point_velocity(w.contact_point)
 			var vx := vel.dot(fwd)
