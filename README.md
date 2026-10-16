@@ -11,7 +11,7 @@ Pre-production. The first goal is **M1 — Driving-feel prototype**: one car on 
 
 ## Getting started (once M0 lands)
 1. Install Godot **4.6.2.stable.official.71f334935** (`Godot --version` must print exactly this; pinned in `project/project.godot` as `config/godot_version`).
-2. Install Git LFS: `brew install git-lfs && git lfs install`.
+2. Install Git LFS: `brew install git-lfs && git lfs install` (once per machine; run it before your first commit). After cloning, run `git lfs pull` to fetch real binaries. CI: use `actions/checkout` with `lfs: true`.
 3. Clone, then open `project/project.godot` in Godot.
 4. Models and animation are made in Blender (`art-source/`) and exported as `.glb` — see [Art Pipeline (Blender)](https://github.com/gambarini/racing/wiki/Art-Pipeline-Blender).
 

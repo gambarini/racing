@@ -63,7 +63,7 @@ Do not add top-level folders under `project/` without updating [Tech Architectur
 
 ## 4. Assets and Git LFS
 
-- Binary types tracked by LFS are defined in `.gitattributes` (`png jpg exr hdr psd glb gltf fbx blend obj wav ogg mp3 ttf otf`). Do not commit those types without `git lfs install` having run; verify with `git lfs ls-files`.
+- Binary types tracked by LFS are defined in `.gitattributes` (`png jpg jpeg tga exr hdr psd glb gltf fbx blend obj wav ogg mp3 ttf otf`). Do not commit those types without `git lfs install` having run; verify with `git lfs ls-files`.
 - `.blend` sources go in `art-source/<category>/<asset>.blend`, **never** inside `project/`. Exports go in `project/<area>/<asset>/<asset>.glb` using the "Racing glb" export preset.
 - Follow the [Art Pipeline (Blender)](https://github.com/gambarini/racing/wiki/Art-Pipeline-Blender) rig naming contract and its checklist before committing an asset (applied transforms, scale 1, origins, collision hull, tri budget, faces +Z).
 - Keep files within [Performance Budgets](https://github.com/gambarini/racing/wiki/Performance-Budgets). Do not commit `.blend1`/`.blend2` backups or telemetry CSVs (gitignored).
