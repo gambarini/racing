@@ -18,6 +18,12 @@ extends Resource
 @export var wheel_inertia := 1.2 ## kg m^2 per wheel (rim, tire, brake disc)
 @export var handbrake_torque := 3000.0 ## Nm on each rear wheel while the handbrake is applied
 
+@export_group("Steering and brakes")
+@export_range(0.0, 60.0) var max_steer_angle := 34.0 ## deg, inner front wheel at full lock
+@export_range(0.0, 1.0) var ackermann_factor := 1.0 ## 0 = parallel steer, 1 = full Ackermann
+@export var brake_torque_front := 1600.0 ## Nm per front wheel at brake = 1
+@export var brake_torque_rear := 1000.0 ## Nm per rear wheel at brake = 1
+
 @export_group("Suspension")
 @export var spring_rate := 30000.0 ## N/m per wheel
 @export var travel := 0.20 ## m, full droop to full bump

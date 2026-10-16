@@ -16,7 +16,7 @@ const RANGE_MIN_SCALE := 0.35
 const RATE_LOW_SPEED := 6.0  # 1/s at 0 km/h
 const RATE_HIGH_SPEED := 2.5  # 1/s at SPEED_REF_KMH
 const ASSIST_SLIP_THRESHOLD_DEG := 8.0
-const ASSIST_MAX_STEER_RAD := 0.5  # steer angle that corresponds to steer == 1
+const ASSIST_MAX_STEER_RAD := 0.5934  # = 34 deg, VehicleDefinition.max_steer_angle (inner wheel at steer == 1; #82)
 
 
 ## Deadzone rescaled so output is 0 at the edge and 1 at full deflection.
