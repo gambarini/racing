@@ -13,7 +13,8 @@ signal countdown_tick(remaining: int)  ## 3, 2, 1, emitted on the tick each coun
 signal race_started
 signal penalty_added(entry: Dictionary)  ## {car, seconds, reason, tick}
 signal car_finished(car: int, race_ticks: int)
-signal race_finished(results: Array)  ## [{rank, car, time, race_time, penalties, dnf, finish_tick}]
+signal race_finished(results: Array)  ## [{rank, car, name, time, race_time, best_lap, penalties, penalty_list, joker_taken, dnf, finish_tick}]
+signal joker_taken_by(car: int, lap: int)
 
 enum State { IDLE, COUNTDOWN, RACING, FINISHED }
 
@@ -22,6 +23,8 @@ const GRID_ROW_SPACING := 8.0  ## m (estimate); shrinks so the whole grid stays 
 const GRID_LATERAL := 3.0  ## m, alternating +/-
 const GRID_ZONE_BEHIND := 77.0  ## flat start zone is s -80..+60; keep the last rear bumper inside
 const JUMP_REASON := &"jump_start"
+const JOKER_REASON := &"joker_missed"
+const RESET_REASON := &"reset"
 const NEVER := -1
 const RANK_HYSTERESIS := 0.3  ## m a car must lead by before it takes the place
 
@@ -30,6 +33,8 @@ const RANK_HYSTERESIS := 0.3  ## m a car must lead by before it takes the place
 @export var countdown_step_seconds := 1.0  ## estimate
 @export var jump_start_distance := 0.5  ## m along the track before GO (estimate)
 @export var jump_start_penalty := 5.0  ## s (estimate)
+@export var joker_required := true  ## mandatory once per race when the track has a joker gate (ruling)
+@export var joker_missed_penalty := 10.0  ## s (estimate; above the measured +2.54 s joker cost)
 @export var finish_grace_seconds := 30.0  ## after the first finisher (estimate)
 @export var min_gap_speed := 5.0  ## m/s floor for the gap-to-car-ahead estimate
 
@@ -48,6 +53,9 @@ var jump_started: Array[bool] = []
 var retired: Array[bool] = []
 var finish_ticks := PackedInt32Array()  ## race ticks at the finish, NEVER until finished
 var penalty_seconds := PackedFloat64Array()
+var joker_taken: Array[bool] = []  ## HUD/AI state (#150): the car has used the joker
+var joker_lap := PackedInt32Array()  ## lap of the first joker use, 0 = not yet
+var names: Array[String] = []
 var rank_of := PackedInt32Array()  ## 1-based live position
 var order := PackedInt32Array()  ## car ids, leader first
 var total_s := PackedFloat64Array()  ## distance raced along the lap line (m), grid cars negative
@@ -81,12 +89,17 @@ func car_count() -> int:
 
 ## Registers a car and returns its id (or -1 past MAX_CARS). `body` is optional: step()-driven
 ## tests pass none.
-func add_car(body: RigidBody3D = null) -> int:
+func add_car(body: RigidBody3D = null, car_name := "") -> int:
 	if timers.size() >= MAX_CARS:
 		push_warning("RaceManager supports at most %d cars" % MAX_CARS)
 		return -1
 	var id := timers.size()
-	timers.append(track.make_lap_timer(tick_dt))
+	var lt := track.make_lap_timer(tick_dt)
+	lt.penalty_applied.connect(_on_timer_penalty.bind(id))  # reset penalties reach the ledger
+	timers.append(lt)
+	names.append(car_name if car_name != "" else "Car %d" % (id + 1))
+	joker_taken.append(false)
+	joker_lap.append(0)
 	bodies.append(body)
 	jump_started.append(false)
 	retired.append(false)
@@ -151,6 +164,16 @@ func add_penalty(car: int, seconds: float, reason: StringName) -> void:
 	penalty_added.emit(entry)
 
 
+func _on_timer_penalty(seconds: float, car: int) -> void:
+	add_penalty(car, seconds, RESET_REASON)
+
+
+## HUD/AI: the joker is still to be taken (track has one, race running, not used yet).
+func joker_available(car: int) -> bool:
+	return track.has_joker and state == State.RACING and not joker_taken[car] and not retired[car] \
+			and finish_ticks[car] == NEVER
+
+
 func retire(car: int) -> void:
 	retired[car] = true
 
@@ -191,6 +214,10 @@ func step(positions: PackedVector3Array, speeds: PackedFloat32Array) -> void:
 	tick += 1
 	for i in timers.size():
 		timers[i].step(positions[i])
+		if timers[i].joker_lap != 0 and not joker_taken[i]:
+			joker_taken[i] = true
+			joker_lap[i] = timers[i].joker_lap
+			joker_taken_by.emit(i, joker_lap[i])
 		speeds_now[i] = speeds[i]
 	if state == State.COUNTDOWN:
 		_step_countdown(positions)
@@ -235,6 +262,8 @@ func _step_finish() -> void:
 	for i in timers.size():
 		if finish_ticks[i] == NEVER and not retired[i] and timers[i].laps.size() >= lap_count:
 			finish_ticks[i] = tick - go_tick
+			if joker_required and track.has_joker and not joker_taken[i]:
+				add_penalty(i, joker_missed_penalty, JOKER_REASON)
 			if _deadline_tick == NEVER:
 				_deadline_tick = tick + int(round(finish_grace_seconds / tick_dt))
 			car_finished.emit(i, finish_ticks[i])
@@ -327,8 +356,20 @@ func _build_results() -> void:
 	results = []
 	for i in fin:
 		var rt := finish_ticks[i] * tick_dt
-		results.append({"rank": results.size() + 1, "car": i, "time": rt + penalty_seconds[i],
-				"race_time": rt, "penalties": penalty_seconds[i], "dnf": false, "finish_tick": finish_ticks[i]})
+		results.append(_result_row(i, rt + penalty_seconds[i], rt, false, finish_ticks[i]))
 	for i in dnf:
-		results.append({"rank": results.size() + 1, "car": i, "time": -1.0, "race_time": -1.0,
-				"penalties": penalty_seconds[i], "dnf": true, "finish_tick": NEVER})
+		results.append(_result_row(i, -1.0, -1.0, true, NEVER))
+
+
+func _result_row(i: int, time: float, race_time: float, is_dnf: bool, ftick: int) -> Dictionary:
+	var best := -1.0
+	for rec in timers[i].laps:
+		if best < 0.0 or rec["raw_time"] < best:
+			best = rec["raw_time"]  # laps stay raw: penalties apply to the race result only
+	var list: Array[Dictionary] = []
+	for e in ledger:
+		if e["car"] == i:
+			list.append(e)
+	return {"rank": results.size() + 1, "car": i, "name": names[i], "time": time, "race_time": race_time,
+			"best_lap": best, "penalties": penalty_seconds[i], "penalty_list": list,
+			"joker_taken": joker_taken[i], "dnf": is_dnf, "finish_tick": ftick}
