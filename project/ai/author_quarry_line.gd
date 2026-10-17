@@ -15,7 +15,7 @@ const JUNCTION_GROWTH := 0.2
 const RAMP := 30.0 ## m over which the detour blends from the main line offset to its centre line
 ## Spans (s_a, s_b, lowest offset) that keep the line off the loose inside lane after the start.
 const INSIDE_LIMITS := [Vector3(195.0, 330.0, -2.0)]
-const ITERATIONS := 4000
+const ITERATIONS := 40000
 
 
 func _initialize() -> void:
