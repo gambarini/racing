@@ -9,7 +9,7 @@
 ## with rolling wheels. `controller` is an optional Callable(tick: int, v: Vehicle, st: DriverInputState)
 ## called every tick after the scripted inputs, for closed-loop drivers (e.g. speed hold).
 ##
-## forward_offset: see the var; used for Spawn_Slope, whose marker sits on the flat run-in (#108).
+## forward_offset: see the var; used for Spawn_Slope.
 ##
 ## result also has fwd (Array of Vector3, unit forward) and steer_angle (PackedFloat64Array, rad, mean of
 ## the two front wheels).

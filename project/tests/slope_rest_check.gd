@@ -16,8 +16,6 @@ func _initialize() -> void:
 func _main() -> void:
 	await physics_frame # let the root finish entering the tree before the first spawn
 	var sc := Scenario.new(self, "Spawn_Slope", [{"t": 0.0, "handbrake": true}], 120 * 13)
-	# Spawn_Slope sits on the 20 m flat run-in below the ramp; start 30 m further on, on the ramp.
-	sc.forward_offset = 30.0
 	sc.csv_path = "user://slope_rest.csv"
 	var r: Dictionary = await sc.run()
 	var p0: Vector3 = r.pos[120 * 3 - 1]

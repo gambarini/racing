@@ -141,7 +141,13 @@ n = (-math.sin(TH10), math.cos(TH10))
 body("Surface", "Slope", (L, 1.0, SW),
      (sx + d[0] * L / 2 - n[0] * 0.5, d[1] * L / 2 - n[1] * 0.5, sz), "tarmac", "tarmac_patch", rot_z=TH10)
 svg_items.append(("rect", "Slope 10 deg", (sx + d[0] * L / 2, sz), (d[0] * L, SW), "#7a4a8a"))
-spawn("Spawn_Slope", (sx - 20, sz), (1, 0))
+# Marker sits on the ramp surface 10 m (horizontal) past its foot, 0.4 m above it, pitched with the slope (#109).
+_m = 10.0
+_x, _y = sx + _m + n[0] * 0.4, _m * math.tan(TH10) + n[1] * 0.4
+_vals = [0, n[0], -d[0], 0, n[1], -d[1], 1, 0, 0, _x, _y, sz]
+nodes.append('[node name="Spawn_Slope" type="Marker3D" parent="." groups=["spawn_point"]]\n'
+             'transform = Transform3D(' + ", ".join(f"{v:.6f}" for v in _vals) + ')\n')
+svg_items.append(("spawn", "Spawn_Slope", (sx + _m, sz), (1, 0)))
 
 # --- jump: 12 deg ramp rising 1.0 m, 8 m wide, 30 m flat landing, along +Z at x=130
 TH12 = math.radians(12.0)

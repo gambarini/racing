@@ -55,7 +55,7 @@ func _initialize() -> void:
 	# slope normal angle
 	var sl: Node3D = root.get_node("Slope/Surface")
 	var sp: Vector3 = root.get_node("Spawn_Slope").global_position
-	var hit := ray_down(space, sp.x + 20.0 + 20.0 * cos(deg_to_rad(10.0)), sp.z)
+	var hit := ray_down(space, sp.x - 10.0 + 20.0 * cos(deg_to_rad(10.0)), sp.z)
 	check(not hit.is_empty(), "slope ray hits")
 	if not hit.is_empty():
 		var ang := rad_to_deg(acos(hit.normal.dot(Vector3.UP)))
