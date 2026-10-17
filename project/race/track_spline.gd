@@ -54,6 +54,18 @@ func sample(d: float) -> Dictionary:
 	return {"position": global_transform * p, "forward": (global_transform.basis * t).normalized()}
 
 
+## Distance along the line of the point closest to world position `pos`.
+func nearest_offset(pos: Vector3) -> float:
+	return centre_line.get_closest_offset(global_transform.affine_inverse() * pos)
+
+
+## World transform for a reset at gate `gate_index`: on the centre line at the gate, facing
+## the track tangent, at the line's height (callers drop it onto the ground).
+func reset_transform(gate_index: int) -> Transform3D:
+	var s := sample(gate_offsets[clampi(gate_index, 0, gate_offsets.size() - 1)])
+	return Transform3D(Basis.looking_at(s["forward"], Vector3.UP), s["position"])
+
+
 func build_gates() -> Array[Gate]:
 	var out: Array[Gate] = []
 	for off in gate_offsets:

@@ -21,6 +21,7 @@ var laps: Array[Dictionary] = []  ## {lap, ticks, time, sector_ticks, sector_tim
 var out_of_order_crossings := 0
 var last_gate_crossed := -1  ## last valid gate this lap, for reset-to-track
 
+var penalty_ticks := 0  ## penalties accrued in the running lap (reset-to-track), in ticks
 var _lap_start_tick := 0
 var _sector_start_tick := 0
 var _sector_ticks: Array[int] = []
@@ -72,7 +73,9 @@ func _accept(i: int) -> void:
 			var rec := {
 				"lap": laps.size() + 1,
 				"ticks": total,
-				"time": total * tick_dt,
+				"time": (total + penalty_ticks) * tick_dt,
+				"raw_time": total * tick_dt,
+				"penalty": penalty_ticks * tick_dt,
 				"sector_ticks": _sector_ticks.duplicate(),
 				"sector_times": secs,
 				"joker": _joker,
@@ -95,6 +98,7 @@ func _start_lap() -> void:
 	_sector_start_tick = tick
 	_sector_ticks = []
 	_joker = false
+	penalty_ticks = 0
 
 
 func _close_sector() -> void:
@@ -104,3 +108,15 @@ func _close_sector() -> void:
 
 func current_lap_ticks() -> int:
 	return tick - _lap_start_tick if running else 0
+
+
+## Add a time penalty (s) to the running lap's recorded time. Ignored before the first start
+## crossing. Sector and raw lap ticks are unaffected; `time` of the lap record includes it.
+func add_penalty(seconds: float) -> void:
+	if running:
+		penalty_ticks += int(round(seconds / tick_dt))
+
+
+## The car was moved by a reset: forget the previous position so the jump is not a crossing.
+func teleported() -> void:
+	_has_prev = false
