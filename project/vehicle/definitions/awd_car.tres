@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VehicleDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://vehicle/vehicle_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://vehicle/definitions/awd_powertrain.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+powertrain = ExtResource("2")
+display_name = "Reference AWD"
+mass = 1300.0
+com_from_front = 0.55
