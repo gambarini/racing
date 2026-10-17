@@ -1,0 +1,97 @@
+## Reusable physics scenario harness (#81). Loads the Proving Ground, spawns a Vehicle with the
+## reference car at a named spawn, steps fixed 120 Hz ticks with a scripted input list and returns
+## a result dict. Used by the *_check.gd validation scripts (run with --fixed-fps 120).
+##
+## inputs: [{t, throttle, brake, handbrake}] sorted by t (seconds). An entry applies from its t until
+## the next entry; missing keys default to 0/false. Before the first entry all inputs are zero.
+##
+## forward_offset: see the var; used for Spawn_Slope, whose marker sits on the flat run-in (#108).
+##
+## result: {spawn, ticks, dt, t, pos (Array[Vector3]), speed, rpm, gear, omega (Array of 4-float
+## PackedFloat64Array, rad/s), start_pos, end_pos, end_basis, end_speed, csv (path or "")}
+extends RefCounted
+
+const PROVING_GROUND := "res://tracks/proving_ground/proving_ground.tscn"
+const DT := 1.0 / 120.0
+const SPAWN_LIFT := 0.1 ## metres above the marker so the car drops onto its springs
+
+var tree: SceneTree
+var spawn := "Spawn_Flat"
+var inputs: Array = []
+var ticks := 120
+## Metres to move along the marker's forward (-Z) before spawning. Non-zero also snaps the car onto
+## the ground there (ray cast) and aligns it with the surface normal, keeping its heading.
+var forward_offset := 0.0
+var csv_path := "" ## "" = no CSV; "user://x.csv" writes the telemetry buffer after the run
+
+
+func _init(p_tree: SceneTree, p_spawn := "Spawn_Flat", p_inputs: Array = [], p_ticks := 120) -> void:
+	tree = p_tree
+	spawn = p_spawn
+	inputs = p_inputs
+	ticks = p_ticks
+
+
+## Input entry in force at time t (seconds) from the scripted list.
+static func input_at(list: Array, t: float) -> Dictionary:
+	var cur := {}
+	for e in list:
+		if float(e.get("t", 0.0)) <= t + 1e-9:
+			cur = e
+		else:
+			break
+	return cur
+
+
+func run() -> Dictionary:
+	var world: Node3D = load(PROVING_GROUND).instantiate()
+	tree.root.add_child(world)
+	var marker: Node3D = world.get_node(spawn)
+	var v: Vehicle = load("res://vehicle/vehicle.gd").new()
+	var xf := marker.global_transform
+	xf.origin += Vector3(0, SPAWN_LIFT, 0)
+	if forward_offset != 0.0:
+		await tree.physics_frame # let the static colliders register before ray casting
+		var from := xf.origin - xf.basis.z * forward_offset + Vector3(0, 20, 0)
+		var q := PhysicsRayQueryParameters3D.create(from, from - Vector3(0, 40, 0))
+		var hit := world.get_world_3d().direct_space_state.intersect_ray(q)
+		assert(not hit.is_empty(), "Scenario: no ground at the offset spawn")
+		var up: Vector3 = hit.normal
+		var fwd := (-xf.basis.z).slide(up).normalized()
+		xf.basis = Basis(fwd.cross(up), up, -fwd)
+		xf.origin = hit.position + up * (SPAWN_LIFT + 0.3)
+	v.transform = xf
+	world.add_child(v)
+	var rec := TelemetryRecorder.new()
+	rec.vehicle = v
+	rec.capacity = maxi(ticks + 8, 64)
+	tree.root.add_child(rec)
+	var out := {"spawn": spawn, "ticks": ticks, "dt": DT, "t": PackedFloat64Array(),
+			"pos": [], "speed": PackedFloat64Array(), "rpm": PackedFloat64Array(),
+			"gear": PackedInt32Array(), "omega": [], "start_pos": v.global_position, "csv": ""}
+	var st := DriverInputState.new()
+	for i in ticks:
+		var inp := input_at(inputs, float(i) * DT)
+		st.throttle = float(inp.get("throttle", 0.0))
+		st.brake = float(inp.get("brake", 0.0))
+		st.handbrake = bool(inp.get("handbrake", false))
+		v.apply_input(st)
+		await tree.physics_frame
+		out.t.append(float(i + 1) * DT)
+		out.pos.append(v.global_position)
+		out.speed.append(v.linear_velocity.length())
+		out.rpm.append(v.rpm())
+		out.gear.append(v.gear())
+		var om := PackedFloat64Array()
+		for w in v.wheels:
+			om.append(w.omega)
+		out.omega.append(om)
+	out.end_pos = v.global_position
+	out.end_basis = v.global_transform.basis
+	out.end_speed = v.linear_velocity.length()
+	if csv_path != "":
+		out.csv = rec.dump(csv_path)
+	world.queue_free()
+	rec.queue_free()
+	await tree.physics_frame
+	return out
