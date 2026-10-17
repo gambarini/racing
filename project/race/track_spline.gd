@@ -1,0 +1,100 @@
+class_name TrackSpline
+extends Node3D
+## Track centre line, ordered timing gates (>= 8, 3 sectors), start grid and joker gate
+## (issue #105). Gates are placed by distance along the closed `centre_line`; gate 0 is
+## start/finish. World forward is -Z; the curve must be authored in driving direction.
+
+@export var centre_line: Curve3D
+## Distances (m) along the centre line, strictly ascending, first = start/finish.
+@export var gate_offsets: PackedFloat32Array = PackedFloat32Array()
+## Gate indices ending sector 1 and sector 2 (the last sector ends at the finish line).
+@export var sector_end_gates: Array[int] = [3, 6]
+@export var gate_half_width := 8.0
+## Joker gate: local position and direction on the joker route; optional.
+@export var has_joker := false
+@export var joker_position := Vector3.ZERO
+@export var joker_forward := Vector3(0, 0, -1)
+@export var joker_half_width := 4.0
+@export var grid_slots := 8
+@export var grid_spacing := 8.0  ## along the line, behind the start line
+@export var grid_lateral := 2.5  ## +/- from the centre line, alternating
+
+
+func gate_count() -> int:
+	return gate_offsets.size()
+
+
+func sector_count() -> int:
+	return sector_end_gates.size() + 1
+
+
+func is_valid() -> bool:
+	if centre_line == null or centre_line.point_count < 2 or gate_offsets.size() < 8 or sector_count() != 3:
+		return false
+	for i in range(1, gate_offsets.size()):
+		if gate_offsets[i] <= gate_offsets[i - 1]:
+			return false
+	for g in sector_end_gates:
+		if g < 1 or g >= gate_offsets.size():
+			return false
+	return true
+
+
+func length() -> float:
+	return centre_line.get_baked_length() if centre_line else 0.0
+
+
+## World position and unit horizontal tangent at distance `d` along the (wrapped) closed line.
+func sample(d: float) -> Dictionary:
+	var l := length()
+	var o := fposmod(d, l)
+	var p := centre_line.sample_baked(o)
+	var q := centre_line.sample_baked(fposmod(o + 0.5, l))
+	var t := Vector3(q.x - p.x, 0.0, q.z - p.z).normalized()
+	return {"position": global_transform * p, "forward": (global_transform.basis * t).normalized()}
+
+
+func build_gates() -> Array[Gate]:
+	var out: Array[Gate] = []
+	for off in gate_offsets:
+		var s := sample(off)
+		out.append(Gate.new(s["position"], s["forward"], gate_half_width))
+	return out
+
+
+func build_joker_gate() -> Gate:
+	if not has_joker:
+		return null
+	return Gate.new(global_transform * joker_position, global_transform.basis * joker_forward, joker_half_width)
+
+
+func make_lap_timer(tick_dt := 1.0 / 120.0) -> LapTimer:
+	return LapTimer.new(build_gates(), sector_end_gates.duplicate(), build_joker_gate(), tick_dt)
+
+
+## World transform of grid slot `i` (0 = pole), facing along the track.
+func grid_transform(i: int) -> Transform3D:
+	var s := sample(gate_offsets[0] - grid_spacing * (i + 1))
+	var fwd: Vector3 = s["forward"]
+	var right := fwd.cross(Vector3.UP)
+	var side := grid_lateral if i % 2 == 0 else -grid_lateral
+	var pos: Vector3 = s["position"] + right * side
+	return Transform3D(Basis.looking_at(fwd, Vector3.UP), pos)
+
+
+## Test/dev helper: closed circular loop of radius `r`, start at (r,0,0) heading -Z.
+static func make_circle(r: float, n_gates := 8) -> TrackSpline:
+	var ts := TrackSpline.new()
+	var c := Curve3D.new()
+	var k := 48
+	for i in k + 1:
+		var a := TAU * float(i) / k
+		c.add_point(Vector3(r * cos(a), 0.0, -r * sin(a)))
+	c.bake_interval = 0.5
+	ts.centre_line = c
+	var offs := PackedFloat32Array()
+	var l := c.get_baked_length()
+	for i in n_gates:
+		offs.append(l * float(i) / n_gates)
+	ts.gate_offsets = offs
+	return ts
