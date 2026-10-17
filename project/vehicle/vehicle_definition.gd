@@ -10,7 +10,7 @@ extends Resource
 @export var wheelbase := 2.5 ## m
 @export var track := 1.5 ## m
 @export var com_height := 0.45 ## m above ground at rest
-@export_range(0.0, 1.0) var com_from_front := 0.525 ## fraction of wheelbase from front axle
+@export_range(0.0, 1.0) var com_from_front := 0.50 ## fraction of wheelbase from front axle
 ## Explicit principal inertia tensor (pitch X, yaw Y, roll Z), kg m^2. Never auto-computed.
 @export var inertia := Vector3(1900.0, 2100.0, 500.0)
 
@@ -32,8 +32,8 @@ extends Resource
 @export var damper_rebound := 3000.0 ## Ns/m (extending)
 @export var bump_stop_zone := 0.02 ## m of travel before full bump where the stop engages
 @export var bump_stop_rate := 400000.0 ## N/m extra stiffness inside the zone
-@export var arb_front := 10000.0 ## N/m of left-right compression difference
-@export var arb_rear := 8000.0
+@export var arb_front := 16000.0 ## N/m of left-right compression difference
+@export var arb_rear := 5000.0
 
 @export_group("Chassis collider")
 @export var chassis_size := Vector3(1.7, 0.5, 3.4) ## m
