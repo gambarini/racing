@@ -26,6 +26,7 @@ var steer := 0.0 ## -1..1, + = right
 var throttle := 0.0 ## 0..1
 var brake := 0.0 ## 0..1
 @export var tire_params: TireParams
+@export var surface_map: SurfaceMap ## optional per-track splat map (#19); null = collider ids only
 var wheels: Array[Wheel] = []
 var powertrain: Powertrain
 var _exclude: Array[RID] = []
@@ -147,8 +148,8 @@ func step_wheels(delta: float) -> void:
 		_surface_base = tire_params
 		_surface_tires.clear()
 	for w in wheels:
-		var surf := SurfaceRegistry.get_surface(w.surface_id)
-		var tp := _tire_for(w.surface_id, surf)
+		var surf := SurfaceBlend.blend(w.surface_weights)
+		var tp := _tire_for(w.surface_weights, surf)
 		var fx_body := 0.0
 		var fy_body := 0.0
 		var fwd := Vector3.ZERO
@@ -231,8 +232,12 @@ func step_wheels(delta: float) -> void:
 			_apply_resistance(w, surf, vel, wheel_mass, delta)
 
 
-## Tire parameters for a surface id, derived once per (base tire, surface) and cached.
-func _tire_for(id: StringName, surf: SurfaceDefinition) -> TireParams:
+## Tire parameters for a wheel's surface weights. Single-surface wheels use a per-id cache;
+## blended wheels derive a fresh (cheap) TireParams from the weight-averaged definition (#19).
+func _tire_for(weights: Dictionary, surf: SurfaceDefinition) -> TireParams:
+	if weights.size() != 1:
+		return TireParams.for_surface(tire_params, surf)
+	var id: StringName = weights.keys()[0]
 	if not _surface_tires.has(id):
 		_surface_tires[id] = TireParams.for_surface(tire_params, surf)
 	return _surface_tires[id]
@@ -254,7 +259,7 @@ func step_suspension(_delta: float) -> void:
 	var space := get_world_3d().direct_space_state
 	var up := global_transform.basis.y
 	for w in wheels:
-		w.probe(space, _exclude, -up)
+		w.probe(space, _exclude, -up, surface_map)
 		if w.is_grounded:
 			# Ground is static: compression rate = mount velocity toward the ground.
 			w.compression_rate = _point_velocity(w.global_position).dot(-up)
