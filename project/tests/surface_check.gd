@@ -4,7 +4,7 @@
 extends SceneTree
 
 const SCENE := "res://tracks/proving_ground/proving_ground.tscn"
-const IDS: Array[StringName] = [&"tarmac", &"gravel", &"mud"]
+const IDS: Array[StringName] = [&"tarmac", &"gravel", &"mud", &"tarmac_wet", &"dirt", &"grass", &"deep_mud"]
 ## Same brake torque on every surface: the definition's full-pedal torque (all wheels lock).
 const BRAKE_SCALE := 1.0
 var failures := 0
@@ -151,6 +151,13 @@ func _initialize() -> void:
 	check(rg >= 1.2 and rg <= 1.8, "gravel stop distance ratio %.2f in 1.2..1.8 (issue: 1.3..1.8)" % rg)
 	check(rm >= 1.5 and rm <= 2.6, "mud stop distance ratio %.2f in 1.5..2.6 (issue: 1.8..2.6)" % rm)
 	check(rg < rm, "mud stops longer than gravel")
+	var order := [&"tarmac", &"tarmac_wet", &"grass", &"mud", &"deep_mud"]
+	var line := ""
+	for id in IDS:
+		line += "%s %.1f m (x%.2f); " % [id, stop[id], stop[id] / stop[&"tarmac"]]
+	print("BRAKE ALL: ", line)
+	for i in range(1, order.size()):
+		check(stop[order[i]] > stop[order[i - 1]], "stop distance %s > %s" % [order[i], order[i - 1]])
 
 	print("RESULT: ", "FAIL (%d)" % failures if failures > 0 else "OK")
 	quit(1 if failures > 0 else 0)

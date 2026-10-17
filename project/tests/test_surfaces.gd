@@ -87,3 +87,19 @@ func test_surface_id_of_meta_then_group_then_default() -> void:
 	assert_eq(Wheel.surface_id_of(null), &"tarmac")
 	for n in [a, b, c]:
 		n.queue_free()
+
+
+func test_v1_surface_table() -> void:
+	# id: [peak, slide, slip, Crr, k]
+	var table := {
+		&"tarmac_wet": [0.70, 0.69, 1.0, 0.014, 0.0],
+		&"dirt": [0.75, 0.81, 1.6, 0.022, 0.00001],
+		&"grass": [0.50, 0.50, 1.6, 0.030, 0.00001],
+		&"deep_mud": [0.35, 0.375, 2.5, 0.14, 0.0005],
+	}
+	for id in table:
+		var d := SurfaceRegistry.get_surface(id)
+		assert_eq(d.id, id)
+		var t: Array = table[id]
+		assert_eq([d.peak_mu_scale, d.slide_mu_scale, d.peak_slip_scale, d.rolling_resistance, d.deformation_drag], t, str(id))
+		assert_true(SurfaceRegistry.ids().has(id))
