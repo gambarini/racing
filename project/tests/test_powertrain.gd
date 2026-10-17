@@ -219,3 +219,36 @@ func test_deterministic() -> void:
 		cb.tick(1.0, DT)
 	assert_eq(a.rpm(), b.rpm())
 	assert_eq(ca.speed, cb.speed)
+
+
+## Direction selection (#108).
+func test_gearbox_select_reverse_neutral_forward() -> void:
+	var gb := Gearbox.new(d)
+	for i in 30: # 0.25 s braking at rest: not yet
+		gb.select(DT, 0.0, 1.0, 0.0)
+	assert_eq(gb.gear, 1)
+	for i in 10:
+		gb.select(DT, 0.0, 1.0, 0.0)
+	assert_eq(gb.gear, -1, "0.3 s brake held at rest selects reverse")
+	for i in 240:
+		gb.select(DT, 0.0, 1.0, 0.0)
+	assert_eq(gb.gear, -1, "holding the brake does not toggle back")
+	gb.select(DT, 0.0, 0.0, 0.0)
+	for i in 40:
+		gb.select(DT, 0.0, 1.0, 0.0)
+	assert_eq(gb.gear, 1, "a fresh 0.3 s brake hold in reverse selects forward")
+	for i in 61:
+		gb.select(DT, 0.0, 0.0, 0.0)
+	assert_eq(gb.gear, 0, "0.5 s with no pedals at rest: neutral")
+	gb.select(DT, 0.5, 0.0, 0.0)
+	assert_eq(gb.gear, 1, "throttle re-selects 1st at once")
+
+
+func test_gearbox_never_reverses_while_moving() -> void:
+	var gb := Gearbox.new(d)
+	for i in 600:
+		gb.select(DT, 0.0, 1.0, 10.0)
+	assert_eq(gb.gear, 1)
+	for i in 600:
+		gb.select(DT, 0.0, 0.0, 0.6)
+	assert_eq(gb.gear, 1, "no neutral while moving either")

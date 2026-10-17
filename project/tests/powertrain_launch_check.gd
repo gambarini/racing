@@ -42,7 +42,7 @@ func _run() -> Dictionary:
 		await physics_frame
 	v.throttle = 1.0
 	var start := v.global_position
-	var gears: Array[int] = [v.gear()]
+	var gears: Array[int] = [] # first entry after the first throttle tick: the car idles in neutral (#108)
 	var t100 := -1.0
 	var max_rpm_1s := 0.0
 	var min_rpm := 1e9
@@ -59,7 +59,7 @@ func _run() -> Dictionary:
 			max_rpm_1s = maxf(max_rpm_1s, v.rpm())
 		min_rpm = minf(min_rpm, v.rpm())
 		max_rpm = maxf(max_rpm, v.rpm())
-		if v.gear() != gears[-1]:
+		if gears.is_empty() or v.gear() != gears[-1]:
 			gears.append(v.gear())
 		if v.powertrain.locked and absf(v.clutch_slip_rpm()) < 20.0:
 			slip_ok = true
