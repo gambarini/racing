@@ -149,6 +149,56 @@ func test_mark_segments_capped_at_400() -> void:
 	assert_eq(m.get_child_count(), 400, "no node leak")
 
 
+func test_blend_respects_per_wheel_cap() -> void:
+	var p := _vfx_vehicle()
+	var v: Vehicle = p[0]
+	var fx: VehicleVfx = p[1]
+	v.linear_velocity = Vector3(0, 0, 40)
+	_set_wheels(v, {&"dirt": 0.5, &"mud": 0.5}, 1.0, 1.0)
+	fx.step()
+	for i in v.wheels.size():
+		var live := 0.0
+		for em: GPUParticles3D in fx.emitters[i].values():
+			if em.emitting:
+				live += em.amount * em.amount_ratio
+		assert_lte(live, SurfaceVfxMath.MAX_PARTICLES_PER_WHEEL + 1e-3)
+	assert_lte(fx.live_particle_estimate(), SurfaceVfxMath.MAX_LIVE_PARTICLES_PER_CAR)
+	# a per-wheel overload (quality > 1 is clamped, so force via many surfaces) stays capped
+	_set_wheels(v, {&"dirt": 0.25, &"mud": 0.25, &"gravel": 0.25, &"deep_mud": 0.25}, 1.0, 1.0)
+	fx.step()
+	assert_lte(fx.live_particle_estimate(), SurfaceVfxMath.MAX_LIVE_PARTICLES_PER_CAR)
+
+
+func test_two_cars_share_one_tyre_marks_with_400_cap() -> void:
+	var root := Node3D.new()
+	add_child_autofree(root)
+	var fxs: Array[VehicleVfx] = []
+	var vs: Array[Vehicle] = []
+	for c in 2:
+		var v := Vehicle.new()
+		v.tire_forces_enabled = false
+		root.add_child(v)
+		var fx := VehicleVfx.new()
+		v.add_child(fx)
+		fx.vehicle = v
+		fxs.append(fx)
+		vs.append(v)
+		v.linear_velocity = Vector3(0, 0, 20)
+	for i in 400:
+		for c in 2:
+			_set_wheels(vs[c], {&"tarmac": 1.0}, 0.6, 0.0)
+			for w in vs[c].wheels:
+				w.contact_point = Vector3(c * 5.0, 0, i * 0.5)
+			fxs[c].step()
+	assert_same(fxs[0].tyre_marks, fxs[1].tyre_marks)
+	assert_eq(fxs[0].tyre_marks.live_count(), 400)
+	var marks := 0
+	for ch in root.get_children():
+		if ch is TyreMarks:
+			marks += 1
+	assert_eq(marks, 1)
+
+
 func test_particle_budget() -> void:
 	var p := _vfx_vehicle()
 	var v: Vehicle = p[0]
@@ -161,6 +211,7 @@ func test_particle_budget() -> void:
 	_set_wheels(v, {&"gravel": 0.5, &"mud": 0.5}, 1.0, 1.0)
 	fx.step()
 	assert_lte(fx.live_particle_estimate(), SurfaceVfxMath.MAX_LIVE_PARTICLES_PER_CAR)
-	for em: GPUParticles3D in fx.emitters.values():
-		assert_lte(em.amount, SurfaceVfxMath.MAX_EFFECT_AMOUNT)
+	for ems in fx.emitters:
+		for em: GPUParticles3D in ems.values():
+			assert_lte(em.amount, SurfaceVfxMath.MAX_EFFECT_AMOUNT)
 	assert_eq(SurfaceVfxMath.MAX_LIVE_PARTICLES_PER_CAR, 4 * SurfaceVfxMath.MAX_EFFECT_AMOUNT)

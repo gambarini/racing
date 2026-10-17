@@ -7,8 +7,9 @@ const MARK_SPACING := 0.3 ## m between mark segments
 
 @export var quality := 1.0 ## 0..1 scales particle amount (quality setting)
 var vehicle: Vehicle
-var tyre_marks: TyreMarks ## shared by all cars; created next to the vehicle if left null
-var emitters := {} ## "wheel_index:surface_id" -> CPUParticles3D
+var tyre_marks: TyreMarks ## one per scene (group "tyre_marks"), found or created next to the car
+var emitters: Array[Dictionary] = [] ## per wheel: surface id -> GPUParticles3D
+var _touched: Array[Dictionary] = [] ## per wheel scratch: ids set this tick
 var _last_mark: Array[Vector3] = []
 var _marking: Array[bool] = []
 
@@ -22,39 +23,81 @@ func _physics_process(_delta: float) -> void:
 	step()
 
 
-## One update; also callable from tests.
+## One update; also callable from tests. No per-tick allocation once emitters exist.
 func step() -> void:
 	if vehicle == null:
 		return
-	if tyre_marks == null:
-		tyre_marks = TyreMarks.new()
-		vehicle.get_parent().add_child.call_deferred(tyre_marks)
+	if tyre_marks == null or not is_instance_valid(tyre_marks):
+		tyre_marks = _find_marks()
+	var n := vehicle.wheels.size()
+	if _last_mark.size() != n:
+		_last_mark.resize(n)
+		_marking.resize(n)
+		while emitters.size() < n:
+			emitters.append({})
+			_touched.append({})
 	var speed := vehicle.linear_velocity.length()
-	while _last_mark.size() < vehicle.wheels.size():
-		_last_mark.append(Vector3.ZERO)
-		_marking.append(false)
-	for i in vehicle.wheels.size():
+	var q := clampf(quality, 0.0, 1.0)
+	for i in n:
 		var w := vehicle.wheels[i]
-		var scales := SurfaceVfxMath.emission_scales(w.surface_weights, w.is_grounded, w.kappa,
-				w.alpha, speed)
-		for id in scales:
-			var em := _emitter(i, id)
-			em.global_position = w.contact_point
-			var s: float = scales[id] * clampf(quality, 0.0, 1.0)
-			em.amount_ratio = s
-			em.emitting = s > 0.0
-		for key in emitters:
-			if key.begins_with("%d:" % i) and not scales.has(StringName(key.substr(key.find(":") + 1))):
-				emitters[key].emitting = false
+		var ems := emitters[i]
+		var touched := _touched[i]
+		touched.clear()
+		var total := 0.0
+		for id in w.surface_weights:
+			total += w.surface_weights[id]
+		var live := 0.0 # live particles this wheel would have (per-wheel cap below)
+		if total > 0.0:
+			for id in w.surface_weights:
+				var eff := SurfaceRegistry.get_surface(id).particle_effect
+				if eff == null:
+					continue
+				var s: float = SurfaceVfxMath.intensity(w.is_grounded, w.kappa, w.alpha, speed,
+						eff.roll_rate) * (w.surface_weights[id] / total) * q
+				live += s * mini(eff.max_amount, SurfaceVfxMath.MAX_EFFECT_AMOUNT)
+		var cap_f := 1.0
+		if live > SurfaceVfxMath.MAX_PARTICLES_PER_WHEEL:
+			cap_f = SurfaceVfxMath.MAX_PARTICLES_PER_WHEEL / live
+		if total > 0.0:
+			for id in w.surface_weights:
+				var eff := SurfaceRegistry.get_surface(id).particle_effect
+				if eff == null:
+					continue
+				var s: float = SurfaceVfxMath.intensity(w.is_grounded, w.kappa, w.alpha, speed,
+						eff.roll_rate) * (w.surface_weights[id] / total) * q * cap_f
+				var em: GPUParticles3D = ems.get(id)
+				if em == null:
+					if s <= 0.0:
+						continue
+					em = _make_emitter(id)
+					ems[id] = em
+				touched[id] = true
+				em.global_position = w.contact_point
+				em.amount_ratio = s
+				var on: bool = s > 0.0
+				if em.emitting != on:
+					em.emitting = on
+		for id in ems:
+			if not touched.has(id) and ems[id].emitting:
+				ems[id].emitting = false
 		_step_marks(i, w, speed)
+
+
+## Finds the scene's shared TyreMarks (group) or creates one next to the car.
+func _find_marks() -> TyreMarks:
+	var found := get_tree().get_first_node_in_group(&"tyre_marks") if is_inside_tree() else null
+	if found is TyreMarks:
+		return found
+	var m := TyreMarks.new()
+	vehicle.get_parent().add_child(m)
+	return m
 
 
 ## Particles per second the (wheel, surface) emitter currently produces (0 if not emitting).
 func emission_rate(wheel_index: int, id: StringName) -> float:
-	var key := "%d:%s" % [wheel_index, id]
-	if not emitters.has(key):
+	if wheel_index >= emitters.size() or not emitters[wheel_index].has(id):
 		return 0.0
-	var em: GPUParticles3D = emitters[key]
+	var em: GPUParticles3D = emitters[wheel_index][id]
 	if not em.emitting:
 		return 0.0
 	return em.amount * em.amount_ratio / maxf(em.lifetime, 0.01)
@@ -63,9 +106,11 @@ func emission_rate(wheel_index: int, id: StringName) -> float:
 ## Particles that can be alive at once across all emitters of this car.
 func live_particle_estimate() -> float:
 	var n := 0.0
-	for em: GPUParticles3D in emitters.values():
-		if em.emitting:
-			n += em.amount * em.amount_ratio
+	for ems in emitters:
+		for id in ems:
+			var em: GPUParticles3D = ems[id]
+			if em.emitting:
+				n += em.amount * em.amount_ratio
 	return n
 
 
@@ -83,10 +128,7 @@ func _step_marks(i: int, w: Wheel, speed: float) -> void:
 		_last_mark[i] = w.contact_point
 
 
-func _emitter(i: int, id: StringName) -> GPUParticles3D:
-	var key := "%d:%s" % [i, id]
-	if emitters.has(key):
-		return emitters[key]
+func _make_emitter(id: StringName) -> GPUParticles3D:
 	var eff := SurfaceRegistry.get_surface(id).particle_effect
 	var em := GPUParticles3D.new()
 	em.top_level = true
@@ -115,5 +157,4 @@ func _emitter(i: int, id: StringName) -> GPUParticles3D:
 	q.material = mat
 	em.draw_pass_1 = q
 	add_child(em)
-	emitters[key] = em
 	return em

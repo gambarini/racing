@@ -12,6 +12,7 @@ const ALPHA_REF := 0.3 ## rad, slip angle giving full slip intensity
 ## chosen here): live particles per car, and tyre-mark segments alive in the whole scene.
 const MAX_LIVE_PARTICLES_PER_CAR := 300
 const MAX_EFFECT_AMOUNT := 75 ## per wheel emitter, so 4 wheels at most reach the per-car cap
+const MAX_PARTICLES_PER_WHEEL := 75.0 ## across all of a wheel's emitters (blends)
 const MAX_MARK_SEGMENTS := 400
 
 
@@ -27,29 +28,6 @@ static func intensity(grounded: bool, kappa: float, alpha: float, speed: float,
 	var slip := clampf(sqrt(k * k + a * a), 0.0, 1.0)
 	var r := clampf(roll_rate, 0.0, 1.0)
 	return speed_f * (r + (1.0 - r) * slip)
-
-
-## Per-surface-id emission scale for one wheel: intensity * blend weight (#19), so a 50/50
-## gravel/dirt wheel emits both effects at half strength each.
-static func emission_scales(weights: Dictionary, grounded: bool, kappa: float, alpha: float,
-		speed: float) -> Dictionary:
-	var out := {}
-	var total := 0.0
-	for k in weights:
-		total += weights[k]
-	if total <= 0.0:
-		return out
-	for k in weights:
-		var eff := SurfaceRegistry.get_surface(k).particle_effect
-		if eff == null:
-			continue
-		out[k] = intensity(grounded, kappa, alpha, speed, eff.roll_rate) * weights[k] / total
-	return out
-
-
-## Particles per second an emitter produces at `scale` (0..1).
-static func rate(effect: SurfaceParticleEffect, scale: float) -> float:
-	return effect.max_amount * scale / maxf(effect.lifetime, 0.01)
 
 
 ## True when the wheel slip exceeds the surface's mark threshold. The slip-angle test is ignored

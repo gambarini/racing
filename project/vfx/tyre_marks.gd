@@ -10,6 +10,10 @@ var _mesh := PlaneMesh.new()
 var _materials := {} ## TyreMarkStyle -> StandardMaterial3D
 
 
+func _enter_tree() -> void:
+	add_to_group(&"tyre_marks")
+
+
 func _init() -> void:
 	_mesh.size = Vector2.ONE
 
