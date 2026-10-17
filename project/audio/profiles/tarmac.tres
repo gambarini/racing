@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SurfaceAudioProfile" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://audio/surface_audio_profile.gd" id="1"]
+[ext_resource type="AudioStream" path="res://audio/surfaces/tarmac_roll.wav" id="2"]
+[ext_resource type="AudioStream" path="res://audio/surfaces/tarmac_slip.wav" id="3"]
+[ext_resource type="AudioStream" path="res://audio/surfaces/tarmac_impact.wav" id="4"]
+
+[resource]
+script = ExtResource("1")
+surface_id = &"tarmac"
+roll_stream = ExtResource("2")
+slip_stream = ExtResource("3")
+impact_stream = ExtResource("4")
+roll_gain = 0.5
+pitch_min = 0.8
+pitch_max = 1.8
+slip_threshold = 0.08
+slip_full = 0.25
+slip_gain = 0.9
+rumble_strong = 0.05
+rumble_weak = 0.03

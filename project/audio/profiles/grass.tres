@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SurfaceAudioProfile" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://audio/surface_audio_profile.gd" id="1"]
+[ext_resource type="AudioStream" path="res://audio/surfaces/grass_roll.wav" id="2"]
+[ext_resource type="AudioStream" path="res://audio/surfaces/grass_slip.wav" id="3"]
+[ext_resource type="AudioStream" path="res://audio/surfaces/grass_impact.wav" id="4"]
+
+[resource]
+script = ExtResource("1")
+surface_id = &"grass"
+roll_stream = ExtResource("2")
+slip_stream = ExtResource("3")
+impact_stream = ExtResource("4")
+roll_gain = 0.4
+pitch_min = 0.8
+pitch_max = 1.3
+slip_threshold = 0.12
+slip_full = 0.4
+slip_gain = 0.6
+rumble_strong = 0.25
+rumble_weak = 0.3
