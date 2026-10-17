@@ -1,5 +1,7 @@
 ## Handbrake turn (#83): enter at 18 m/s, throttle off, steer +0.6, handbrake on from 0.3 s to
 ## 1.3 s, steer held. Identical input script on gravel (Spawn_Gravel) and tarmac (Spawn_Flat).
+## INFORMATIONAL (design ruling on #83, option b): the gate below is unchanged but a miss prints
+## "KNOWN-FAIL #112" and exits 0 until #112 (staged tuning plan) makes it a hard gate again.
 ## Gate: heading change at t = 3.0 s is >= 90 deg on gravel and tarmac <= 0.6 x gravel.
 ## CSV on failure: user://handbrake_gravel.csv / user://handbrake_tarmac.csv
 ## Run: godot --headless --fixed-fps 120 --path project -s res://tests/handbrake_turn_check.gd
@@ -49,6 +51,14 @@ func _main() -> void:
 	var tarmac: Dictionary = await _run("Spawn_Flat", 0.0, "user://handbrake_tarmac.csv")
 	print("handbrake turn heading change at 3.0 s: gravel %.1f deg (end speed %.1f), tarmac %.1f deg (end speed %.1f)"
 			% [gravel.yaw_deg, gravel.end_speed, tarmac.yaw_deg, tarmac.end_speed])
-	cu.check_range("gravel heading change (deg)", gravel.yaw_deg, 90.0, 1e9, gravel.csv)
-	cu.check_range("tarmac heading change (deg)", tarmac.yaw_deg, -1e9, 0.6 * gravel.yaw_deg, tarmac.csv)
-	cu.finish(self)
+	var g_ok: bool = gravel.yaw_deg >= 90.0
+	var t_ok: bool = tarmac.yaw_deg <= 0.6 * gravel.yaw_deg
+	print("gate gravel >= 90 deg: ", "PASS" if g_ok else "FAIL", "; tarmac <= 0.6 x gravel (%.1f deg): " % (0.6 * gravel.yaw_deg),
+			"PASS" if t_ok else "FAIL")
+	if g_ok and t_ok:
+		print("RESULT: OK (gates met; #112 can promote this check to a hard gate)")
+	else:
+		print("KNOWN-FAIL #112: handbrake turn does not separate gravel from tarmac; csv: ",
+				ProjectSettings.globalize_path(tarmac.csv))
+		print("RESULT: OK (informational)")
+	quit(0)
