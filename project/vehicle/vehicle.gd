@@ -147,6 +147,10 @@ func step_wheels(delta: float) -> void:
 	if _surface_base != tire_params:
 		_surface_base = tire_params
 		_surface_tires.clear()
+	var pos := global_position
+	var com_world := pos + global_transform.basis * center_of_mass
+	var body_fwd := -global_transform.basis.z
+	var gv := Vector3.DOWN * _g * wheel_mass # gravity on one wheel's share of the mass
 	for w in wheels:
 		var surf := SurfaceBlend.blend(w.surface_weights)
 		var tp := _tire_for(w.surface_weights, surf)
@@ -159,13 +163,13 @@ func step_wheels(delta: float) -> void:
 		var brake := w.brake_torque + (d.handbrake_torque * w.handbrake_gain if handbrake else 0.0)
 		if w.is_grounded:
 			var n := w.contact_normal
-			fwd = -global_transform.basis.z
+			fwd = body_fwd
 			fwd = (fwd - n * fwd.dot(n)).normalized()
 			# Steered wheel: rotate the forward axis about the normal (+ steer_angle = right turn,
 			# which is a negative rotation about +Y).
 			fwd = fwd.rotated(n, -w.steer_angle)
 			right = fwd.cross(n).normalized()
-			vel = _point_velocity(w.contact_point)
+			vel = _point_velocity_at(w.contact_point, com_world)
 			var vx := vel.dot(fwd)
 			var vy := vel.dot(right)
 			var target := TireModel.slip_ratio(w.omega, w.radius, vx, tp)
@@ -175,7 +179,7 @@ func step_wheels(delta: float) -> void:
 			var f_max := TireModel.peak_force(w.fz, tp)
 			var held := false
 			# Static stage (#85): a locked, braked wheel at (near) rest is anchored to the ground.
-			var speed_t := Vector2(vx, vy).length()
+			var speed_t := sqrt(vx * vx + vy * vy)
 			if brake > 0.0 and w.drive_torque == 0.0 and speed_t < StaticFriction.RELEASE_SPEED:
 				if not w.anchored and w.omega == 0.0 and speed_t < StaticFriction.ENGAGE_SPEED:
 					w.anchored = true
@@ -195,7 +199,6 @@ func step_wheels(delta: float) -> void:
 				w.anchored = false
 			if not held:
 				# Gravity's slope components: part of what the tire must cancel to hold/stop the car.
-				var gv := Vector3.DOWN * _g * wheel_mass
 				var push_x := gv.dot(fwd)
 				var push_y := gv.dot(right)
 				var f0 := TireModel.compute(w.kappa, w.alpha, w.fz, tp)
@@ -228,8 +231,8 @@ func step_wheels(delta: float) -> void:
 		w.fx = fx_body
 		w.fy = fy_body
 		if tire_forces_enabled and w.is_grounded:
-			apply_force(fwd * fx_body + right * fy_body, w.contact_point - global_position)
-			_apply_resistance(w, surf, vel, wheel_mass, delta)
+			apply_force(fwd * fx_body + right * fy_body, w.contact_point - pos)
+			_apply_resistance(w, surf, vel, wheel_mass, delta, pos)
 
 
 ## Tire parameters for a wheel's surface weights. Single-surface wheels use a per-id cache;
@@ -245,29 +248,33 @@ func _tire_for(weights: Dictionary, surf: SurfaceDefinition) -> TireParams:
 
 ## Rolling resistance and deformation drag (#12): a force against the contact-point velocity in
 ## the ground plane, F = Fz * (Crr + k v^2), capped so it cannot reverse the motion in one tick.
-func _apply_resistance(w: Wheel, surf: SurfaceDefinition, vel: Vector3, wheel_mass: float, delta: float) -> void:
+func _apply_resistance(w: Wheel, surf: SurfaceDefinition, vel: Vector3, wheel_mass: float, delta: float,
+		body_pos: Vector3) -> void:
 	var vt := vel - w.contact_normal * vel.dot(w.contact_normal)
 	var speed := vt.length()
 	if speed < 1e-4:
 		return
 	var f := minf(surf.resistance_force(w.fz, speed), wheel_mass * speed / delta)
-	apply_force(-vt / speed * f, w.contact_point - global_position)
+	apply_force(-vt / speed * f, w.contact_point - body_pos)
 
 
 ## Probe, compute and apply all suspension forces for one tick.
 func step_suspension(_delta: float) -> void:
 	var space := get_world_3d().direct_space_state
 	var up := global_transform.basis.y
+	var down := -up
+	var pos := global_position
+	var com_world := pos + global_transform.basis * center_of_mass
 	for w in wheels:
-		w.probe(space, _exclude, -up, surface_map)
+		w.probe(space, _exclude, down, surface_map)
 		if w.is_grounded:
 			# Ground is static: compression rate = mount velocity toward the ground.
-			w.compression_rate = _point_velocity(w.global_position).dot(-up)
+			w.compression_rate = _point_velocity_at(w.global_position, com_world).dot(down)
 	_compute_forces()
 	for w in wheels:
 		if not w.is_grounded:
 			continue
-		var r := w.contact_point - global_position
+		var r := w.contact_point - pos
 		# Fz is the contact-patch normal load, so it acts along the surface normal (no spurious
 		# lateral force when the body pitches or rolls on flat ground).
 		apply_force(w.contact_normal * w.fz, r)
@@ -280,16 +287,21 @@ func _compute_forces() -> void:
 		var r: Wheel = wheels[axle * 2 + 1]
 		var k_arb := (d.arb_front if axle == 0 else d.arb_rear) if arb_enabled else 0.0
 		var arb := SuspensionMathScript.arb_force(l.compression, r.compression, k_arb)
-		for pair in [[l, arb], [r, -arb]]:
-			var w: Wheel = pair[0]
-			if not w.is_grounded:
-				continue
-			w.fz = SuspensionMathScript.total_force(w.compression, w.compression_rate,
+		if l.is_grounded:
+			l.fz = SuspensionMathScript.total_force(l.compression, l.compression_rate,
 					d.spring_rate, d.damper_bump, d.damper_rebound, d.travel,
-					d.bump_stop_zone, d.bump_stop_rate, pair[1])
+					d.bump_stop_zone, d.bump_stop_rate, arb)
+		if r.is_grounded:
+			r.fz = SuspensionMathScript.total_force(r.compression, r.compression_rate,
+					d.spring_rate, d.damper_bump, d.damper_rebound, d.travel,
+					d.bump_stop_zone, d.bump_stop_rate, -arb)
 
 
 ## Velocity of the body at a world point (linear_velocity is the CoM velocity).
 func _point_velocity(world_point: Vector3) -> Vector3:
 	var com_world := global_position + global_transform.basis * center_of_mass
+	return _point_velocity_at(world_point, com_world)
+
+
+func _point_velocity_at(world_point: Vector3, com_world: Vector3) -> Vector3:
 	return linear_velocity + angular_velocity.cross(world_point - com_world)

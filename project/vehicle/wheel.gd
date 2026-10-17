@@ -30,13 +30,19 @@ var anchor := Vector3.ZERO ## world contact point latched when the wheel came to
 var radius := 0.32
 var travel := 0.2
 
+var _query: PhysicsRayQueryParameters3D ## reused every tick (no per-tick allocation, #116)
+
 
 ## Ray from the mount down the body's -Y axis; fills the contact fields except forces.
 func probe(space: PhysicsDirectSpaceState3D, exclude: Array[RID], body_down: Vector3,
 		surface_map: SurfaceMap = null) -> void:
 	var from := global_position
-	var q := PhysicsRayQueryParameters3D.create(from, from + body_down * (travel + radius), 1, exclude)
-	var hit := space.intersect_ray(q)
+	if _query == null:
+		_query = PhysicsRayQueryParameters3D.create(from, from, 1, exclude)
+	_query.from = from
+	_query.to = from + body_down * (travel + radius)
+	_query.exclude = exclude
+	var hit := space.intersect_ray(_query)
 	if hit.is_empty():
 		is_grounded = false
 		compression = 0.0
