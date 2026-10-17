@@ -8,7 +8,7 @@ extends RefCounted
 const G := 9.81
 
 ## Lateral acceleration budget as a fraction of mu * g used for corner speeds.
-var lat_g := 0.85
+var lat_g := 0.72
 ## Peak mu of the reference tyre on dry tarmac; the surface scale multiplies it.
 var mu_peak := 1.1
 ## Braking deceleration as a fraction of mu * g used for the braking pass.
@@ -29,6 +29,10 @@ var stanley_k := 2.0 ## 1/s
 var stanley_soft := 2.0 ## m/s
 var ff_time := 0.25 ## s of curvature look-ahead for the steering feed-forward
 var ff_gain := 1.0
+var tc_alpha0 := deg_to_rad(5.0) ## rear slip angle where the throttle starts to lift
+var tc_alpha_span := deg_to_rad(8.0)
+var tc_kappa0 := 0.12 ## rear slip ratio where the throttle starts to lift
+var tc_kappa_span := 0.2
 var throttle_span := 3.0
 var brake_span := 3.0
 
@@ -157,7 +161,12 @@ func drive(v: Vehicle, st: DriverInputState, dt: float) -> void:
 	vt = minf(vt, target[ja])
 	var err := vt - speed
 	if err >= 0.0:
-		st.throttle = clampf(err / throttle_span, 0.0, 1.0)
+		# Traction control: back off while the rear tyres slide sideways or spin.
+		var rear := maxf(absf(v.wheels[2].alpha), absf(v.wheels[3].alpha))
+		var tc := clampf(1.0 - (rear - tc_alpha0) / tc_alpha_span, 0.0, 1.0)
+		var spin := maxf(v.wheels[2].kappa, v.wheels[3].kappa)
+		tc = minf(tc, clampf(1.0 - (spin - tc_kappa0) / tc_kappa_span, 0.0, 1.0))
+		st.throttle = clampf(err / throttle_span, 0.0, 1.0) * tc
 		st.brake = 0.0
 	else:
 		st.throttle = 0.0

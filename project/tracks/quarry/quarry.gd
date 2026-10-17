@@ -23,32 +23,32 @@ const H_MIN := 12.0
 const H_MAX := 25.0
 ## Control polygon (x, z), driving direction; start/finish straight runs -Z at x = 620.
 const CONTROL: Array[Vector2] = [
-	Vector2(620, 560), Vector2(620, 440), Vector2(615, 340), Vector2(595, 265), Vector2(545, 205),
-	Vector2(480, 170), Vector2(400, 140), Vector2(320, 115), Vector2(240, 110), Vector2(175, 135),
-	Vector2(135, 185), Vector2(125, 250), Vector2(150, 310), Vector2(205, 350), Vector2(270, 375),
-	Vector2(335, 395), Vector2(375, 440), Vector2(365, 495), Vector2(320, 540), Vector2(290, 590),
-	Vector2(310, 632), Vector2(370, 655), Vector2(450, 660), Vector2(530, 660), Vector2(580, 650),
-	Vector2(612, 622),
+	Vector2(620, 560), Vector2(620, 440), Vector2(615, 340), Vector2(582, 266), Vector2(519, 198),
+	Vector2(469, 162), Vector2(419, 140), Vector2(348, 116), Vector2(262, 108), Vector2(196, 121),
+	Vector2(154, 151), Vector2(142, 191), Vector2(155, 242), Vector2(188, 290), Vector2(235, 337),
+	Vector2(261, 369), Vector2(280, 404), Vector2(305, 469), Vector2(316, 546), Vector2(330, 589),
+	Vector2(353, 622), Vector2(388, 645), Vector2(442, 660), Vector2(531, 660), Vector2(578, 648),
+	Vector2(604, 627), Vector2(616, 600),
 ]
 ## Surface zones by distance s along the line (m, wrapped to [-150, L-150)); "b" < 0 means
 ## L + b. Outside every zone the road is tarmac.
 const ZONES := [
-	{"id": &"dirt", "a": 380.0, "b": 850.0},
-	{"id": &"gravel", "a": 850.0, "b": 1250.0},
-	{"id": &"dirt", "a": 1250.0, "b": 1530.0},
-	{"id": &"mud", "a": 1540.0, "b": 1570.0},
-	{"id": &"dirt", "a": 1570.0, "b": -230.0},
+	{"id": &"dirt", "a": 380.0, "b": 700.0},
+	{"id": &"gravel", "a": 700.0, "b": 1050.0},
+	{"id": &"dirt", "a": 1050.0, "b": 1250.0},
+	{"id": &"mud", "a": 1250.0, "b": 1280.0},
+	{"id": &"dirt", "a": 1280.0, "b": -330.0},
 ]
 const IDS: Array[StringName] = [&"tarmac", &"dirt", &"grass", &"gravel", &"mud"]
 ## Timing gates by distance along the line (12 gates, 3 sectors). Gates 5 and 6 bracket the joker
 ## detour so the detour never skips a gate.
-const GATE_OFFSETS: Array[float] = [0.0, 150.0, 300.0, 450.0, 600.0, 690.0, 1010.0, 1130.0, 1260.0, 1400.0, 1540.0, 1690.0]
+const GATE_OFFSETS: Array[float] = [0.0, 140.0, 280.0, 420.0, 560.0, 650.0, 1030.0, 1130.0, 1260.0, 1380.0, 1500.0, 1600.0]
 
 ## Joker route (#104): the main line over s in [JOKER_A, JOKER_B] pushed to the outside (right of
 ## travel, the bend is a left-hander) by JOKER_OUT m, with smooth ramps JOKER_RAMP of the span.
-const JOKER_A := 730.0
-const JOKER_B := 960.0
-const JOKER_OUT := 25.0
+const JOKER_A := 710.0
+const JOKER_B := 985.0
+const JOKER_OUT := 15.0
 const JOKER_RAMP := 0.35
 const JOKER_HALF := 5.0 ## joker road is 10 m wide
 ## Joker surfaces by distance js along the detour (same zone format as ZONES; +-1e9 = open ended).
@@ -59,29 +59,29 @@ const JOKER_ZONES := [
 
 ## Road widening for the first corner after the start (wider for pack racing): +WIDEN_EXTRA m each
 ## side over s in [WIDEN_A, WIDEN_B] with WIDEN_RAMP m ramps.
-const WIDEN_A := 262.0
-const WIDEN_B := 360.0
+const WIDEN_A := 205.0
+const WIDEN_B := 315.0
 const WIDEN_RAMP := 40.0
 const WIDEN_EXTRA := 2.5
 ## Lane patches on the main line: the strip of lateral distance [d0, d1] on `side` (-1 left,
 ## +1 right of travel) over s in [a, b] is `id` instead of the zone surface.
 const LANES := [
-	{"a": 255.0, "b": 365.0, "side": -1.0, "d0": 2.5, "d1": 12.0, "id": &"gravel"},
+	{"a": 225.0, "b": 305.0, "side": -1.0, "d0": 2.5, "d1": 12.0, "id": &"gravel"},
 ]
 ## Scripted lines for the drive test: lateral offsets (m, + = right) as Vector4(s0, s1, lateral,
 ## ramp) entries; lateral(s) = sum of lateral * rise(s0 - ramp .. s0) * fall(s1 .. s1 + ramp).
 ## "tarmac" keeps right on the tarmac outside of the left-hand corner; "inside" cuts the apex over
 ## the loose gravel lane.
 const LINES := {
-	&"tarmac": [Vector4(262.0, 360.0, 3.0, 40.0)],
-	&"inside": [Vector4(262.0, 360.0, -4.5, 40.0)],
+	&"tarmac": [Vector4(205.0, 315.0, 4.0, 40.0)],
+	&"inside": [Vector4(205.0, 315.0, -4.5, 40.0)],
 }
 const DEFAULT_LINE := &"tarmac"
 ## Vertical road features added to the rolling profile: gaussian bumps at distance s with height h
 ## (m, negative = dip) and standard deviation w (m). Crest = positive h, compression = dip.
 const FEATURES := [
-	{"s": 140.0, "h": 1.2, "w": 16.0, "kind": "crest"},
-	{"s": 200.0, "h": -1.2, "w": 14.0, "kind": "compression"},
+	{"s": 105.0, "h": 0.9, "w": 16.0, "kind": "crest"},
+	{"s": 160.0, "h": -1.3, "w": 14.0, "kind": "compression"},
 ]
 
 var terrain: HeightmapTerrain
