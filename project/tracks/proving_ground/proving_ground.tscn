@@ -817,7 +817,7 @@ mesh = SubResource("mesh_90")
 surface_material_override/0 = SubResource("mat_tarmac_patch")
 
 [node name="Spawn_Slope" type="Marker3D" parent="." groups=["spawn_point"]]
-transform = Transform3D(0.000000, -0.000000, -1.000000, 0.000000, 1.000000, 0.000000, 1.000000, 0.000000, 0.000000, 50.000000, 0.400000, 100.000000)
+transform = Transform3D(0.000000, -0.173648, -0.984808, 0.000000, 0.984808, -0.173648, 1.000000, 0.000000, 0.000000, 79.930541, 2.157193, 100.000000)
 
 [node name="Jump" type="Node3D" parent="."]
 metadata/angle_deg = 12.0
