@@ -86,6 +86,7 @@ func _main() -> void:
 	var q := drive.quarry
 	var mgr := RaceManager.new()
 	mgr.setup(q.track, 1)
+	mgr.joker_required = false  # joker enforcement is covered by joker_results_check
 	root.add_child(mgr)
 	_grid_checks(drive, mgr)
 
