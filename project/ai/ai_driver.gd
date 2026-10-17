@@ -40,6 +40,7 @@ var pedal_rate_up := 14.0
 var pedal_rate_down := 20.0
 
 ## Outputs / state for tests, HUD and debug draw.
+var speed_now := 0.0 ## forward speed (m/s) sensed this tick
 var s := 0.0 ## arc length of the car on the line (m)
 var look_point := Vector3.ZERO
 var target_speed := 0.0
@@ -95,9 +96,10 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	else:
 		s = line.nearest_s(pos, s, 40.0)
 	rear_slip_deg = slip_deg
+	speed_now = speed
 	var sp := maxf(speed, 0.0)
 	# --- Steering: pure pursuit ---
-	var ld := clampf(look_k * sp, look_min, look_max)
+	var ld := look_distance(sp)
 	var li := line.sample_index(s + ld)
 	look_point = line.point_at_index(li, line.sample_frac(li, s + ld))
 	var dx := look_point.x - pos.x
@@ -160,6 +162,11 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 		telemetry[o + 10] = slip_deg
 		telemetry_rows += 1
 	tick += 1
+
+
+## Pure-pursuit look-ahead (m) at forward speed `speed` (m/s).
+func look_distance(speed: float) -> float:
+	return clampf(look_k * maxf(speed, 0.0), look_min, look_max)
 
 
 ## PI speed controller: > 0 = throttle demand, < 0 = brake demand (both in [-1, 1]).

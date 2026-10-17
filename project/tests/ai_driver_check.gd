@@ -49,10 +49,8 @@ func _lap_run(csv := "") -> Dictionary:
 	root.add_child(drive)
 	await physics_frame
 	var line: RacingLine = load(LINE)
-	var ai := AiDriver.new()
-	ai.setup(line, MAX_TICKS if csv != "" else 0)
+	var ai := drive.start_ai(line, MAX_TICKS if csv != "" else 0)
 	ai.telemetry_enabled = csv != ""
-	drive.ai_driver = ai
 	var wrong := WrongWayDetector.new()
 	var wrong_ticks := 0
 	var max_ct := 0.0
