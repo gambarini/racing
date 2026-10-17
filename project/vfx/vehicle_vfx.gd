@@ -44,27 +44,33 @@ func step() -> void:
 		var touched := _touched[i]
 		touched.clear()
 		var total := 0.0
-		for id in w.surface_weights:
-			total += w.surface_weights[id]
+		for j in w.weight_count:
+			total += w.weights[j]
 		var live := 0.0 # live particles this wheel would have (per-wheel cap below)
 		if total > 0.0:
-			for id in w.surface_weights:
+			for j in w.weight_count:
+				if w.weights[j] <= 0.0:
+					continue
+				var id := w.weight_ids[j]
 				var eff := SurfaceRegistry.get_surface(id).particle_effect
 				if eff == null:
 					continue
 				var s: float = SurfaceVfxMath.intensity(w.is_grounded, w.kappa, w.alpha, speed,
-						eff.roll_rate) * (w.surface_weights[id] / total) * q
+						eff.roll_rate) * (w.weights[j] / total) * q
 				live += s * mini(eff.max_amount, SurfaceVfxMath.MAX_EFFECT_AMOUNT)
 		var cap_f := 1.0
 		if live > SurfaceVfxMath.MAX_PARTICLES_PER_WHEEL:
 			cap_f = SurfaceVfxMath.MAX_PARTICLES_PER_WHEEL / live
 		if total > 0.0:
-			for id in w.surface_weights:
+			for j in w.weight_count:
+				if w.weights[j] <= 0.0:
+					continue
+				var id := w.weight_ids[j]
 				var eff := SurfaceRegistry.get_surface(id).particle_effect
 				if eff == null:
 					continue
 				var s: float = SurfaceVfxMath.intensity(w.is_grounded, w.kappa, w.alpha, speed,
-						eff.roll_rate) * (w.surface_weights[id] / total) * q * cap_f
+						eff.roll_rate) * (w.weights[j] / total) * q * cap_f
 				var em: GPUParticles3D = ems.get(id)
 				if em == null:
 					if s <= 0.0:

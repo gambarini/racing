@@ -139,11 +139,13 @@ func step(delta: float) -> void:
 			continue
 		var speed := absf(w.omega * w.radius)
 		var slip := SurfaceAudioMath.slip_amount(w.kappa, w.alpha)
-		for id in w.surface_weights:
-			var s: int = _idx.get(id, -1)
+		for j in w.weight_count:
+			var wt: float = w.weights[j]
+			if wt <= 0.0:
+				continue
+			var s: int = _idx.get(w.weight_ids[j], -1)
 			if s < 0:
 				continue
-			var wt: float = w.surface_weights[id]
 			var p := _profiles[s]
 			_roll_t[s] += wt * SurfaceAudioMath.roll_gain(p, speed) / n
 			_slip_t[s] += wt * SurfaceAudioMath.slip_gain(p, slip) / n

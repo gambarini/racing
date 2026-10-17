@@ -28,3 +28,20 @@ static func for_surface(base: TireParams, surface: SurfaceDefinition) -> TirePar
 	p.kappa_peak = base.kappa_peak * surface.peak_slip_scale
 	p.alpha_peak = base.alpha_peak * surface.peak_slip_scale
 	return p
+
+
+## Allocation-free for_surface: writes into caller-owned `out` (same fields as base.duplicate()).
+static func for_surface_into(base: TireParams, surface: SurfaceDefinition, out: TireParams) -> TireParams:
+	if surface == null or surface.is_neutral():
+		return base
+	out.mu_peak = base.mu_peak * surface.peak_mu_scale
+	out.mu_slide = base.mu_slide * surface.slide_mu_scale
+	out.kappa_peak = base.kappa_peak * surface.peak_slip_scale
+	out.alpha_peak = base.alpha_peak * surface.peak_slip_scale
+	out.falloff = base.falloff
+	out.nominal_load = base.nominal_load
+	out.load_sensitivity = base.load_sensitivity
+	out.relaxation_length = base.relaxation_length
+	out.low_speed_floor = base.low_speed_floor
+	out.min_relax_rate = base.min_relax_rate
+	return out
