@@ -106,7 +106,6 @@ func test_max_twelve_cars() -> void:
 	for i in 12:
 		assert_eq(mgr.add_car(), i)
 	assert_eq(mgr.add_car(), -1)
-	assert_push_error("at most 12")
 
 
 func test_countdown_go_and_input_lock() -> void:

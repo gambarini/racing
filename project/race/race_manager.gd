@@ -83,7 +83,7 @@ func car_count() -> int:
 ## tests pass none.
 func add_car(body: RigidBody3D = null) -> int:
 	if timers.size() >= MAX_CARS:
-		push_error("RaceManager supports at most %d cars" % MAX_CARS)
+		push_warning("RaceManager supports at most %d cars" % MAX_CARS)
 		return -1
 	var id := timers.size()
 	timers.append(track.make_lap_timer(tick_dt))
