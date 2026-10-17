@@ -11,7 +11,7 @@ extends Resource
 @export var falloff := 0.1
 @export var nominal_load := 3000.0 ## N, load at which mu_peak/mu_slide apply
 ## Fractional loss of mu per extra nominal_load of Fz (0.05 -> -5 % mu at 2x load).
-@export var load_sensitivity := 0.05
+@export var load_sensitivity := 0.075
 @export var relaxation_length := 0.3 ## m, slip lags the target over this rolled distance
 @export var low_speed_floor := 0.5 ## m/s, slip-defining speed never drops below this
 @export var min_relax_rate := 2000.0 ## 1/s, floor on the slip lag rate: at near-zero speed slip tracks its target instantly (no lag-induced ringing)
