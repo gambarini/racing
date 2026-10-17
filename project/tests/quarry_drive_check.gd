@@ -160,6 +160,7 @@ func _main() -> void:
 	var s_min := 0.0
 	var flat_lo := 9.0
 	var flat_hi := -9.0
+	var flat_rows := 0
 	for i in range(first, mini(last, vert.size())):
 		var s := s_of[i]
 		if vert[i] > vmax:
@@ -170,6 +171,7 @@ func _main() -> void:
 			s_min = s
 		var rel := fposmod(s + 100.0, len) - 100.0 # -100 .. len - 100 around the start line
 		if rel > -60.0 and rel < 40.0 and csv.speed[i] > 100.0:
+			flat_rows += 1
 			flat_lo = minf(flat_lo, vert[i])
 			flat_hi = maxf(flat_hi, vert[i])
 	print("INFO: vert_g flying lap: max %.2f g at s=%.0f, min %.2f g at s=%.0f (smoothed over %d rows); flat start zone %.2f .. %.2f g" % [
@@ -183,7 +185,8 @@ func _main() -> void:
 			crest_s = f["s"]
 		elif f["kind"] == "compression":
 			comp_s = f["s"]
-	cu.check(absf(s_min - crest_s) < 60.0 or absf(s_min - comp_s) < 60.0, "the crest spike sits at a designed feature (s=%.0f)" % s_min)
-	cu.check(absf(s_max - comp_s) < 60.0 or absf(s_max - crest_s) < 60.0, "the compression spike sits at a designed feature (s=%.0f)" % s_max)
+	cu.check(absf(s_min - crest_s) < 25.0, "the crest spike is within 25 m of the designed crest (s=%.0f vs %.0f)" % [s_min, crest_s])
+	cu.check(absf(s_max - comp_s) < 25.0, "the compression spike is within 25 m of the designed compression (s=%.0f vs %.0f)" % [s_max, comp_s])
+	cu.check(flat_rows > 30, "control: the flat start zone was sampled (%d rows)" % flat_rows)
 	cu.check(flat_hi < 0.5 and flat_lo > -0.3, "control: the flat start zone has no spike (%.2f .. %.2f g)" % [flat_lo, flat_hi])
 	cu.finish(self)
