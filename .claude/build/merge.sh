@@ -15,6 +15,12 @@ repo=$(jq -r .repo "$cfg")
 main=$(jq -r .main_checkout "$cfg")
 base=$(jq -r .base_branch "$cfg")
 
+# 0. The main checkout must be on base_branch: step 3 fast-forwards whatever is checked out.
+cur=$(git -C "$main" branch --show-current)
+if [[ "$cur" != "$base" ]]; then
+  echo "merge: main checkout is on '$cur', not '$base'"; exit 1
+fi
+
 # 1. Every check must be `pass` (or `skipping`). Pending or failing -> stop without touching anything.
 states=$(gh pr checks "$pr" -R "$repo" --json bucket --jq '.[].bucket' 2>/dev/null || true)
 if [[ -z "$states" ]]; then

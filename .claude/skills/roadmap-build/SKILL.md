@@ -44,14 +44,14 @@ Skip issues labelled `blocked`, `needs:split` (the split children are in the que
 
 **Board sync:** on each queue refresh, add open issues that are missing from the Project (agents should add the ones they create, but check): compare the issue numbers with `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[].content.number]'`, then `gh project item-add <number> --owner <owner> --url <issue url>` and cache the new item id in `project_items`. Also rebuild the item-id cache whenever an agent reports `NEW_ISSUES`, before you edit those items' Status: `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[]|{key:(.content.number|tostring),value:.id}]|from_entries' > <state_dir>/project_items.json`. A stale cache makes `item-edit` fail with "field-id must be provided".
 
-Set Status with `.claude/build/board.sh <issue> <todo|in_progress|done>`. It reads the IDs from config, rebuilds a stale cache and adds a missing item to the board itself.
+Set Status with `.claude/build/board.sh <issue> <todo|in_progress|done>`. Run the helper scripts from `<main_checkout>` (`cd` there first if the shell's working directory drifted), so the relative path and its allow rule match. It reads the IDs from config, rebuilds a stale cache and adds a missing item to the board itself.
 
 **Role for an item:** first matching `role_by_label` entry by its `area:*` labels, else `default`. `area:design` items go to `game-designer` directly.
 
 **Parallelism:** two items may run at the same time only if their `area:*` labels are disjoint **and** neither depends on the other (an item depends on an earlier open item in the same milestone that its body or the wiki names, or that touches the same system). When unsure, run serially.
 
 ## 3. Per-item pipeline
-For each picked issue `#n` (set Project Status → In Progress with `gh project item-edit`, using IDs from config; find the item id once via `gh project item-list … --format json --jq` and cache it in state):
+For each picked issue `#n` (set Project Status → In Progress with `.claude/build/board.sh <n> in_progress`):
 
 1. **Design gate** — if the issue has no `Acceptance criteria` comment (check with `gh issue view n --json comments --jq '[.comments[].body|select(test("Acceptance criteria"))]|length'`): launch `game-designer`. If it returns `split`, drop `#n` and re-queue its children.
    - **Batch gates:** check the next 3–5 queued items at once and give one designer call all of those that lack criteria (it costs about 1 % per batch). Also use a batch to fill an idle slot when no build can start (dependency, perf item running alone, serial mode).
