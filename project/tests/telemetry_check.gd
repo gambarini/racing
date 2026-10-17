@@ -52,7 +52,7 @@ func run(rec: TelemetryRecorder) -> void:
 	DirAccess.remove_absolute(path)
 	var header := lines[0].split(",")
 	check(lines[0] == ",".join(TelemetrySchema.column_names()), "header matches schema")
-	check(header.size() == 41, "41 columns")
+	check(header.size() == TelemetrySchema.N_COLS, "%d columns" % TelemetrySchema.N_COLS)
 	check(absi(lines.size() - 1 - 360) <= 1, "row count %d ~ 360" % (lines.size() - 1))
 	var bad := 0
 	var prev_t := -1.0

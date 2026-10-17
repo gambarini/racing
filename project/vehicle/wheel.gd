@@ -20,6 +20,7 @@ var steer_angle := 0.0 ## rad, + = right turn (written by #82, read by VehicleVi
 var fy := 0.0 ## N, lateral tire force actually applied (after the stop limiter)
 var fx := 0.0 ## N, longitudinal tire force actually applied (after the stop limiter)
 var drive_torque := 0.0 ## Nm input from the powertrain (#11), + = forward
+var extra_inertia := 0.0 ## kg m^2 reflected onto this wheel by a locked clutch (#11)
 var brake_torque := 0.0 ## Nm input, magnitude >= 0
 var handbrake_gain := 0.0 ## 1 on rear wheels, 0 on front
 var anchored := false ## static-friction stage (#85) is holding this wheel at `anchor`

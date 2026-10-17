@@ -34,7 +34,9 @@ func test_schema_columns() -> void:
 	assert_eq(names[0], "t")
 	assert_eq(names[8], "handbrake")
 	assert_eq(names[9], "fl_fz")
-	assert_eq(names[names.size() - 1], "rr_surface")
+	assert_eq(names[TelemetrySchema.POWERTRAIN_COL - 1], "rr_surface")
+	assert_eq(names[names.size() - 4], "rpm") # powertrain channels (#11) follow the wheel block
+	assert_eq(names[names.size() - 1], "engine_torque")
 
 
 func test_buffer_ring_wraps_and_keeps_order() -> void:

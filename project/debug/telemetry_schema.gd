@@ -8,9 +8,14 @@ const WHEELS: Array[String] = ["fl", "fr", "rl", "rr"]
 const CHASSIS: Array[String] = ["t", "speed_kmh", "yaw_rate", "lat_g", "long_g", "steer", "throttle", "brake", "handbrake"]
 const WHEEL_CHANNELS: Array[String] = ["fz", "kappa", "alpha", "fx", "fy", "travel", "rpm", "surface"]
 
+## Powertrain channels (#11), appended after the wheel block so earlier columns keep their index.
+const POWERTRAIN: Array[String] = ["rpm", "gear", "clutch_slip", "engine_torque"]
+
 const N_CHASSIS := 9
 const N_WHEEL_CH := 8
-const N_COLS := N_CHASSIS + 4 * N_WHEEL_CH
+const N_POWERTRAIN := 4
+const N_COLS := N_CHASSIS + 4 * N_WHEEL_CH + N_POWERTRAIN
+const POWERTRAIN_COL := N_CHASSIS + 4 * N_WHEEL_CH
 const SURFACE_CH := 7
 
 
@@ -19,6 +24,7 @@ static func column_names() -> PackedStringArray:
 	for w in WHEELS:
 		for c in WHEEL_CHANNELS:
 			out.append(w + "_" + c)
+	out.append_array(POWERTRAIN)
 	return out
 
 

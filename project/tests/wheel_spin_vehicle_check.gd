@@ -27,6 +27,7 @@ func _initialize() -> void:
 	root.add_child(ground)
 	get_root().add_child(root)
 	var v: Vehicle = load("res://vehicle/vehicle.gd").new()
+	v.powertrain_enabled = false # tire check: no engine braking on the rolling car
 	v.tire_forces_enabled = true
 	v.position = Vector3(0, 0.05, 0)
 	root.add_child(v)
