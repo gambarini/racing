@@ -10,6 +10,7 @@ extends RefCounted
 ## the last sector ends at the finish line, so sector ticks always sum to the lap ticks.
 
 signal lap_completed(record: Dictionary)
+signal penalty_applied(seconds: float)  ## #150: a running-lap penalty (reset); the race manager mirrors it into its ledger
 
 var gates: Array[Gate] = []
 var sector_end_gates: Array[int] = []
@@ -23,6 +24,8 @@ var laps: Array[Dictionary] = []  ## {lap, ticks, time, sector_ticks, sector_tim
 var out_of_order_crossings := 0
 var last_gate_crossed := -1  ## last valid gate this lap, for reset-to-track
 
+var joker_lap := 0  ## #150: lap number (1-based) in which the joker gate first registered, 0 = never
+var joker_crossings := 0
 var penalty_ticks := 0  ## penalties accrued in the running lap (reset-to-track), in ticks
 var _lap_start_tick := 0
 var _sector_start_tick := 0
@@ -56,6 +59,9 @@ func step(pos: Vector3) -> void:
 func _crossings(a: Vector3, b: Vector3) -> void:
 	if running and joker_gate != null and joker_gate.crossed_by(a, b):
 		_joker = true
+		joker_crossings += 1
+		if joker_lap == 0:
+			joker_lap = laps.size() + 1
 	for i in gates.size():
 		if not gates[i].crossed_by(a, b):
 			continue
@@ -131,6 +137,7 @@ func current_lap_ticks() -> int:
 func add_penalty(seconds: float) -> void:
 	if running:
 		penalty_ticks += int(round(seconds / tick_dt))
+		penalty_applied.emit(seconds)
 
 
 ## The car was moved by a reset: forget the previous position so the jump is not a crossing.
