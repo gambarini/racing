@@ -5,6 +5,11 @@
 class_name VehicleDefinition
 extends Resource
 
+## Optional drivetrain for this car (layout, centre diff split, diff settings). Null = the
+## reference powertrain. A Vehicle's own `powertrain_definition` overrides it.
+@export var powertrain: PowertrainDefinition
+@export var display_name := "Reference RWD" ## shown by the car selection debug option
+
 @export_group("Mass")
 @export var mass := 1200.0 ## kg
 @export var wheelbase := 2.5 ## m

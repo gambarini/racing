@@ -21,17 +21,23 @@ var locked := false
 var engagement := 0.0
 var clutch_torque := 0.0 ## Nm through the clutch (engine side), last tick
 var rpm_driveline := 0.0 ## rpm the wheels would turn the engine at (signed by gear direction)
-var torque_left := 0.0 ## Nm to the left driven wheel
+var torque_left := 0.0 ## Nm to the left wheel of the driven axle (rear axle on AWD)
 var torque_right := 0.0
+var torque_front_left := 0.0 ## Nm to the front wheels; only non-zero on AWD
+var torque_front_right := 0.0
+var torque_front_axle := 0.0 ## Nm into the front axle (after the centre diff); AWD only
+var torque_rear_axle := 0.0
 var reflected_inertia := 0.0 ## kg m^2 to add to each driven wheel while locked
 var shifts := 0
 var _prev_w_drive := 0.0
+var _inertia_share := 0.5 ## engine inertia is reflected onto n driven wheels: 1/n each
 
 
 func _init(definition: PowertrainDefinition) -> void:
 	def = definition
 	engine = EngineModel.new(def)
 	gearbox = Gearbox.new(def)
+	_inertia_share = 0.25 if def.layout == PowertrainDefinition.Layout.AWD else 0.5
 
 
 func rpm() -> float:
@@ -51,13 +57,18 @@ func engine_torque() -> float:
 	return engine.torque
 
 
-## One physics tick. `wl`, `wr` are the driven wheels' speeds (rad/s, + = forward).
+## One physics tick. `wl`, `wr` are the driven axle's wheel speeds (rad/s, + = forward): the
+## rear axle for RWD, the front axle for FWD, the rear axle for AWD with `wfl`, `wfr` the front.
 ## `brake` (0..1) and `speed` (signed forward m/s) drive the R/N/1 selection (#108).
-func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed := 0.0) -> void:
+func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed := 0.0,
+		wfl := 0.0, wfr := 0.0) -> void:
+	var awd := def.layout == PowertrainDefinition.Layout.AWD
+	# Driveline speed: the mean of the driven wheels (all four on AWD).
+	var w_mean := 0.25 * (wl + wr + wfl + wfr) if awd else 0.5 * (wl + wr)
 	if gearbox.select(dt, throttle, brake, speed):
 		locked = false
 	var ratio := gearbox.total_ratio()
-	var w_drive := ratio * 0.5 * (wl + wr)
+	var w_drive := ratio * w_mean
 	rpm_driveline = w_drive / RPM_TO_RAD
 	# Upshift on engine speed (wheelspin must not trigger it); equal to driveline speed when locked.
 	var dir := gearbox.update(dt, engine.rpm(), rpm_driveline, throttle)
@@ -65,7 +76,7 @@ func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed 
 		locked = false
 		shifts += 1
 		ratio = gearbox.total_ratio()
-		w_drive = ratio * 0.5 * (wl + wr)
+		w_drive = ratio * w_mean
 		rpm_driveline = w_drive / RPM_TO_RAD
 		_prev_w_drive = w_drive
 	var cut := gearbox.torque_cut() or ratio == 0.0
@@ -84,7 +95,7 @@ func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed 
 		else:
 			engine.omega = maxf(w_drive, 0.0)
 			tc = te # the inertia term is carried by the wheels via reflected_inertia
-			reflected_inertia = ie * ratio * ratio * 0.5
+			reflected_inertia = ie * ratio * ratio * _inertia_share
 	if not locked:
 		var w_old := engine.omega
 		# Slipping clutch = viscous coupling that saturates at the capacity. Its gain is bounded
@@ -110,15 +121,27 @@ func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed 
 				locked = true
 				w_new = maxf(w_drive, 0.0)
 				tc = te
-				reflected_inertia = ie * ratio * ratio * 0.5
+				reflected_inertia = ie * ratio * ratio * _inertia_share
 		# Numerical damping: while the clutch bites, keep part of the engine inertia on the wheels.
 		# A bare 1.2 kg m^2 wheel handed a slipping-clutch torque outruns the tire's relaxation and
 		# burns out; scaling by engagement keeps an open clutch (shifts, idle) free.
 		if not locked:
-			reflected_inertia = def.clutch_slip_inertia_share * ie * ratio * ratio * 0.5 * engagement
+			reflected_inertia = def.clutch_slip_inertia_share * ie * ratio * ratio * _inertia_share * engagement
 		engine.omega = w_new
 	clutch_torque = tc
 	_prev_w_drive = w_drive
-	var split := Differential.split(def, tc * ratio, wl, wr)
-	torque_left = split.x
-	torque_right = split.y
+	var t_axle := tc * ratio
+	if awd:
+		var c := Differential.centre_split(def, t_axle, 0.5 * (wfl + wfr), 0.5 * (wl + wr))
+		torque_front_axle = c.x
+		torque_rear_axle = c.y
+		var sf := Differential.split(def, c.x, wfl, wfr)
+		torque_front_left = sf.x
+		torque_front_right = sf.y
+		var sr := Differential.split(def, c.y, wl, wr)
+		torque_left = sr.x
+		torque_right = sr.y
+	else:
+		var split := Differential.split(def, t_axle, wl, wr)
+		torque_left = split.x
+		torque_right = split.y

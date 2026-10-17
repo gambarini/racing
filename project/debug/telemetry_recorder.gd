@@ -75,6 +75,7 @@ func record(dt: float) -> void:
 		r[TelemetrySchema.wheel_col(i, 5)] = w.compression
 		r[TelemetrySchema.wheel_col(i, 6)] = w.omega * 60.0 / TAU
 		r[TelemetrySchema.wheel_col(i, 7)] = float(_surface_index(w.surface_id)) if w.is_grounded else -1.0
+		r[TelemetrySchema.DRIVE_TQ_COL + i] = w.drive_torque
 	var reg := SurfaceRegistry.ids()
 	for i in mini(4, vehicle.wheels.size()):
 		var w: Wheel = vehicle.wheels[i]

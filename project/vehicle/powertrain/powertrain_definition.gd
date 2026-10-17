@@ -4,6 +4,8 @@ class_name PowertrainDefinition
 extends Resource
 
 enum DiffType { OPEN, LOCKED, LSD }
+## Which axles the engine drives. FWD hands the front wheels (0, 1), RWD the rear (2, 3).
+enum Layout { RWD, FWD, AWD }
 
 @export_group("Engine")
 ## rpm -> Nm at full throttle (x = rpm, y = Nm), ascending rpm. Clamped outside the table.
@@ -44,13 +46,32 @@ enum DiffType { OPEN, LOCKED, LSD }
 @export var clutch_lock_window_rpm := 400.0 ## slip must be below this to lock
 
 @export_group("Driveline")
-@export var driven_wheels := PackedInt32Array([2, 3]) ## wheel indices; the pair feeds the diff (L, R)
-@export var diff_type := DiffType.OPEN
+@export var layout := Layout.RWD
+@export var diff_type := DiffType.OPEN ## front and rear axle diffs (AWD) or the one driven axle's diff
 @export var diff_lock_stiffness := 60.0 ## Nm per rad/s of wheel speed difference (LOCKED, LSD)
 @export var diff_lock_max := 2000.0 ## Nm, cap on the LOCKED coupling torque
 @export var lsd_preload := 100.0 ## Nm
 @export var lsd_power_ratio := 0.4 ## extra lock torque per Nm of drive input
 @export var lsd_coast_ratio := 0.2 ## same, while braking with the engine
+
+@export_group("Centre differential (AWD)")
+@export_range(0.0, 1.0) var centre_split_front := 0.4 ## share of torque to the front axle when axle speeds match
+@export var centre_diff_type := DiffType.OPEN
+@export var centre_lock_stiffness := 150.0 ## Nm per rad/s of front-minus-rear axle speed (LOCKED, LSD)
+@export var centre_lock_max := 3000.0 ## Nm, cap on the LOCKED coupling torque
+@export var centre_lsd_preload := 100.0 ## Nm
+@export var centre_lsd_power_ratio := 0.4
+@export var centre_lsd_coast_ratio := 0.2
+
+
+## Wheel indices fed by the axle diff(s): rear pair, front pair, or (AWD) front then rear.
+func driven_wheels() -> PackedInt32Array:
+	match layout:
+		Layout.FWD:
+			return PackedInt32Array([0, 1])
+		Layout.AWD:
+			return PackedInt32Array([0, 1, 2, 3])
+	return PackedInt32Array([2, 3])
 
 
 func gear_count() -> int:
