@@ -46,12 +46,23 @@ func length() -> float:
 
 ## World position and unit horizontal tangent at distance `d` along the (wrapped) closed line.
 func sample(d: float) -> Dictionary:
+	return {"position": position_at(d), "forward": forward_at(d)}
+
+
+## World position of the centre line at distance `d` (wrapped). Allocation-free.
+func position_at(d: float) -> Vector3:
+	return global_transform * centre_line.sample_baked(fposmod(d, length()))
+
+
+## World-space horizontal unit tangent at distance `d` (wrapped). Allocation-free, so per-tick
+## callers use this instead of `sample()`, which builds a Dictionary.
+func forward_at(d: float) -> Vector3:
 	var l := length()
 	var o := fposmod(d, l)
 	var p := centre_line.sample_baked(o)
 	var q := centre_line.sample_baked(fposmod(o + 0.5, l))
 	var t := Vector3(q.x - p.x, 0.0, q.z - p.z).normalized()
-	return {"position": global_transform * p, "forward": (global_transform.basis * t).normalized()}
+	return (global_transform.basis * t).normalized()
 
 
 ## Distance along the line of the point closest to world position `pos`.

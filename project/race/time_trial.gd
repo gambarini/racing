@@ -33,7 +33,11 @@ func setup(p_vehicle: Vehicle, p_timer: LapTimer, p_track_id := "") -> void:
 	_was_running = timer.running
 	var loaded := GhostLap.load_file(ghost_path)
 	if loaded != null and loaded.track_id == track_id:
-		best = loaded
+		if loaded.tick_hz == Engine.physics_ticks_per_second:
+			best = loaded
+		else:
+			# Replay advances one recorded tick per physics tick: a different rate would run the ghost at the wrong speed.
+			push_warning("Ghost recorded at %d Hz, playback is %d Hz: ignoring it" % [loaded.tick_hz, Engine.physics_ticks_per_second])
 	if ghost == null:
 		ghost = _make_ghost_node()
 		add_child(ghost)
