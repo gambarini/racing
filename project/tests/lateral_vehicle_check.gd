@@ -26,6 +26,7 @@ func make_vehicle(roll_deg := 0.0) -> Vehicle:
 	root.add_child(ground)
 	get_root().add_child(root)
 	var v: Vehicle = load("res://vehicle/vehicle.gd").new()
+	v.powertrain_enabled = false # tire check: no engine braking on the rolling car
 	v.transform = Transform3D(ground.basis, ground.basis.y * 0.05)
 	root.add_child(v)
 	return v

@@ -65,6 +65,8 @@ static func fmt(v: float, digits := 1) -> String:
 func format_text(r: PackedFloat64Array, rec: TelemetryRecorder) -> String:
 	var s := "speed %s km/h  yaw %s rad/s  lat %s g  long %s g\n" % [fmt(r[1]), fmt(r[2], 2), fmt(r[3], 2), fmt(r[4], 2)]
 	s += "steer %s thr %s brk %s hb %s   rec %.1f us/tick\n" % [fmt(r[5], 2), fmt(r[6], 2), fmt(r[7], 2), fmt(r[8], 0), rec.record_cost_us]
+	var pc := TelemetrySchema.POWERTRAIN_COL
+	s += "rpm %s gear %s slip %s rpm  Te %s Nm\n" % [fmt(r[pc], 0), fmt(r[pc + 1], 0), fmt(r[pc + 2], 0), fmt(r[pc + 3], 0)]
 	for i in 4:
 		var c := func(ch: int) -> float: return r[TelemetrySchema.wheel_col(i, ch)]
 		var surf := rec.surface_name(c.call(7))

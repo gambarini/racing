@@ -75,6 +75,12 @@ func record(dt: float) -> void:
 		r[TelemetrySchema.wheel_col(i, 5)] = w.compression
 		r[TelemetrySchema.wheel_col(i, 6)] = w.omega * 60.0 / TAU
 		r[TelemetrySchema.wheel_col(i, 7)] = float(_surface_index(w.surface_id)) if w.is_grounded else -1.0
+	if vehicle.powertrain != null:
+		var pc := TelemetrySchema.POWERTRAIN_COL
+		r[pc] = vehicle.rpm()
+		r[pc + 1] = float(vehicle.gear())
+		r[pc + 2] = vehicle.clutch_slip_rpm()
+		r[pc + 3] = vehicle.engine_torque()
 	buffer.push(r)
 	_t += dt
 
@@ -108,7 +114,7 @@ func dump(path := "") -> String:
 	for i in buffer.count:
 		for c in TelemetrySchema.N_COLS:
 			var v := buffer.value(i, c)
-			var is_surface := c >= TelemetrySchema.N_CHASSIS \
+			var is_surface := c >= TelemetrySchema.N_CHASSIS and c < TelemetrySchema.POWERTRAIN_COL \
 					and (c - TelemetrySchema.N_CHASSIS) % TelemetrySchema.N_WHEEL_CH == TelemetrySchema.SURFACE_CH
 			if is_surface:
 				cells[c] = surface_name(v)

@@ -9,6 +9,7 @@ extends RigidBody3D
 const WheelScript := preload("res://vehicle/wheel.gd")
 const SuspensionMathScript := preload("res://vehicle/suspension_math.gd")
 const DEFAULT_DEFINITION := preload("res://vehicle/definitions/reference_car.tres")
+const DEFAULT_POWERTRAIN := preload("res://vehicle/definitions/reference_powertrain.tres")
 
 @export var definition: VehicleDefinition
 @export var arb_enabled := true
@@ -16,12 +17,17 @@ const DEFAULT_DEFINITION := preload("res://vehicle/definitions/reference_car.tre
 ## this off; omega still integrates (reaction torque uses the same Fx).
 @export var tire_forces_enabled := true
 @export var handbrake := false
+## Drive the rear wheels from the powertrain (#11). Tests that set Wheel.drive_torque by hand
+## turn this off.
+@export var powertrain_enabled := true
+@export var powertrain_definition: PowertrainDefinition
 ## Driver commands (set by apply_input; #11 powertrain reads `throttle`).
 var steer := 0.0 ## -1..1, + = right
 var throttle := 0.0 ## 0..1
 var brake := 0.0 ## 0..1
 @export var tire_params: TireParams
 var wheels: Array[Wheel] = []
+var powertrain: Powertrain
 var _exclude: Array[RID] = []
 var _g := 9.81
 var _surface_tires := {} ## surface id -> TireParams derived from _surface_base
@@ -34,6 +40,9 @@ func _ready() -> void:
 	_g = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.81))
 	_apply_definition()
 	_build_wheels()
+	if powertrain_definition == null:
+		powertrain_definition = DEFAULT_POWERTRAIN
+	powertrain = Powertrain.new(powertrain_definition)
 	_exclude = [get_rid()]
 
 
@@ -91,7 +100,41 @@ func _build_wheels() -> void:
 
 func _physics_process(delta: float) -> void:
 	step_suspension(delta)
+	step_powertrain(delta)
 	step_wheels(delta)
+
+
+## Engine rpm, gear (-1 R, 0 N, 1..n), clutch slip (rpm, + = engine faster) and engine torque (Nm).
+func rpm() -> float:
+	return powertrain.rpm() if powertrain != null else 0.0
+
+
+func gear() -> int:
+	return powertrain.gear() if powertrain != null else 0
+
+
+func clutch_slip_rpm() -> float:
+	return powertrain.clutch_slip_rpm() if powertrain != null else 0.0
+
+
+func engine_torque() -> float:
+	return powertrain.engine_torque() if powertrain != null else 0.0
+
+
+## Step the powertrain and hand its torque to the driven wheels (before step_wheels).
+func step_powertrain(delta: float) -> void:
+	if not powertrain_enabled or powertrain == null:
+		return
+	var dw := powertrain.def.driven_wheels
+	if dw.size() < 2 or wheels.size() <= maxi(dw[0], dw[1]):
+		return
+	var l: Wheel = wheels[dw[0]]
+	var r: Wheel = wheels[dw[1]]
+	powertrain.step(delta, throttle, l.omega, r.omega)
+	l.drive_torque = powertrain.torque_left
+	r.drive_torque = powertrain.torque_right
+	l.extra_inertia = powertrain.reflected_inertia
+	r.extra_inertia = powertrain.reflected_inertia
 
 
 ## Integrate wheel spin and (optionally) apply tire forces Fx, Fy. Fixed tick only.
@@ -111,6 +154,7 @@ func step_wheels(delta: float) -> void:
 		var fwd := Vector3.ZERO
 		var vel := Vector3.ZERO
 		var right := Vector3.ZERO
+		var wi := d.wheel_inertia + w.extra_inertia
 		var brake := w.brake_torque + (d.handbrake_torque * w.handbrake_gain if handbrake else 0.0)
 		if w.is_grounded:
 			var n := w.contact_normal
@@ -157,26 +201,29 @@ func step_wheels(delta: float) -> void:
 				var sl := WheelSpin.fx_slopes(w.kappa, w.omega, vx, w.fz, w.radius, vx, delta,
 						tp, w.alpha)
 				fx_body = WheelSpin.implicit_fx(f0.x, sl.x, sl.y, w.drive_torque, w.radius,
-						d.wheel_inertia, wheel_mass, delta, push_x)
+						wi, wheel_mass, delta, push_x)
 				# A braked wheel that stays locked cannot spin up, so its slope must not soften the
 				# force (otherwise a parked car creeps); re-solve with a rigid wheel.
 				if brake > 0.0 and WheelSpin.step(w.omega, w.drive_torque, brake, fx_body, w.radius,
-						d.wheel_inertia, delta) == 0.0:
+						wi, delta) == 0.0:
 					fx_body = WheelSpin.implicit_fx(f0.x, 0.0, sl.y, w.drive_torque, w.radius,
-							d.wheel_inertia, wheel_mass, delta, push_x)
+							wi, wheel_mass, delta, push_x)
 				var sy := WheelSpin.fy_slope(w.kappa, w.alpha, vx, vy, w.fz, delta, tp)
 				fy_body = WheelSpin.implicit_fy(f0.y, sy, wheel_mass, delta, push_y)
 				# Grip must not reverse the car within a tick.
-				fx_body = TireModel.limit_to_stop(fx_body, vx, wheel_mass, delta, push_x)
+				# Traction from a driven wheel is not grip opposing motion: without this a launch
+				# from rest waits (~0.4 s) for numerical noise in vx to turn positive.
+				if w.drive_torque * fx_body <= 0.0:
+					fx_body = TireModel.limit_to_stop(fx_body, vx, wheel_mass, delta, push_x)
 				fy_body = TireModel.limit_to_stop(fy_body, vy, wheel_mass, delta, push_y)
 			w.omega = WheelSpin.step(w.omega, w.drive_torque, brake, fx_body, w.radius,
-					d.wheel_inertia, delta)
+					wi, delta)
 		else:
 			w.anchored = false
 			w.kappa = 0.0
 			w.alpha = 0.0
 			w.omega = WheelSpin.step(w.omega, w.drive_torque, brake, 0.0, w.radius,
-					d.wheel_inertia, delta)
+					wi, delta)
 		w.fx = fx_body
 		w.fy = fy_body
 		if tire_forces_enabled and w.is_grounded:
