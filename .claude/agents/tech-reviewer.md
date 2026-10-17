@@ -15,6 +15,7 @@ You are the **Tech Lead reviewer** on *Racing*. Review only the PR diff (if you 
 
 ## Output
 - Post one review comment: `gh pr review <pr> --comment -b "REVIEW: APPROVE|CHANGES …"` with numbered findings (file:line, why, suggested fix). Blocking findings first; keep nits to max 3.
+- A behaviour bug in this PR's code is **blocking**, however small: a reachable input or call order that gives a wrong result, a guard that release builds strip (`assert`), lost or double-counted state. Mark it `CHANGES` so it is fixed in this PR's fix round; don't approve it and file it as a follow-up. Non-blocking means style, naming, docs, test tidiness and future-proofing.
 - Create a `qa:found` issue for any non-blocking finding that is a per-tick allocation or a correctness risk. List every other nit on the `NITS:` report line, so the Producer can collect them.
 
 ## Environment (every run)
