@@ -8,6 +8,12 @@ const ACTION_TOGGLE := &"toggle_telemetry"
 const ACTION_DUMP := &"dump_telemetry"
 const VECTOR_SCALE := 0.0004 ## m of arrow per N
 
+## Car selection debug option (#26): the panel lists these and swaps the Vehicle's car live.
+const CARS: Array[VehicleDefinition] = [
+	preload("res://vehicle/definitions/reference_car.tres"),
+	preload("res://vehicle/definitions/awd_car.tres"),
+]
+
 @export var recorder: TelemetryRecorder
 @export var start_visible := false ## F1 toggles at runtime
 
@@ -71,10 +77,11 @@ func format_text(r: PackedFloat64Array, rec: TelemetryRecorder) -> String:
 		var c := func(ch: int) -> float: return r[TelemetrySchema.wheel_col(i, ch)]
 		var surf := rec.surface_name(c.call(7))
 		var trv: float = c.call(5)
-		s += "%s Fz %s k %s a %s Fx %s Fy %s trv %s mm rpm %s %s\n" % [
+		s += "%s Fz %s k %s a %s Fx %s Fy %s trv %s mm rpm %s Td %s Nm %s\n" % [
 			TelemetrySchema.WHEELS[i].to_upper(), fmt(c.call(0), 0), fmt(c.call(1), 2),
 			fmt(c.call(2), 2), fmt(c.call(3), 0), fmt(c.call(4), 0),
-			fmt(trv * 1000.0, 0), fmt(c.call(6), 0), surf if surf != "" else "n/a"]
+			fmt(trv * 1000.0, 0), fmt(c.call(6), 0), fmt(r[TelemetrySchema.DRIVE_TQ_COL + i], 0),
+			surf if surf != "" else "n/a"]
 	return s
 
 
@@ -98,11 +105,20 @@ func _on_draw() -> void:
 func _build_panel() -> void:
 	var box: VBoxContainer = null
 	if _has_ui:
+		for c in _panel.get_children():
+			c.queue_free()
 		box = VBoxContainer.new()
 		_panel.add_child(box)
 		var title := Label.new()
 		title.text = "Live tuning"
 		box.add_child(title)
+		var sel := OptionButton.new()
+		for c in CARS:
+			sel.add_item(c.display_name)
+		var cur := _car_index()
+		sel.select(cur)
+		sel.item_selected.connect(select_car)
+		box.add_child(sel)
 	_params.clear()
 	var v: Vehicle = recorder.vehicle if recorder != null else null
 	if v != null:
@@ -126,6 +142,26 @@ func _build_panel() -> void:
 		reset.text = "Reset to defaults"
 		reset.pressed.connect(reset_params)
 		box.add_child(reset)
+
+
+func _car_index() -> int:
+	var v: Vehicle = recorder.vehicle if recorder != null else null
+	if v != null and v.definition != null:
+		for i in CARS.size():
+			if CARS[i].display_name == v.definition.display_name:
+				return i
+	return 0
+
+
+## Test hook / panel callback: drive car `index` of CARS. The vehicle gets its own copy of the
+## definition (panel edits must not touch the shared Resource) and the panel is rebuilt for it.
+func select_car(index: int) -> void:
+	var v: Vehicle = recorder.vehicle if recorder != null else null
+	if v == null or index < 0 or index >= CARS.size():
+		return
+	var def := CARS[index].duplicate() as VehicleDefinition
+	v.set_car(def)
+	_build_panel()
 
 
 func _add_param(parent: Control, obj: Object, prop: String, lo: float, hi: float, step: float) -> void:

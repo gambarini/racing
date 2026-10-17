@@ -37,7 +37,8 @@ func test_schema_columns() -> void:
 	assert_eq(names[TelemetrySchema.POWERTRAIN_COL - 1], "rr_surface")
 	assert_eq(names[TelemetrySchema.POWERTRAIN_COL], "rpm") # powertrain channels (#11) follow the wheel block
 	assert_eq(names[TelemetrySchema.POWERTRAIN_COL + 3], "engine_torque")
-	assert_eq(names[names.size() - 1], "rr_w_" + String(SurfaceRegistry.ids()[-1])) # surface weights (#19) last
+	assert_eq(names[TelemetrySchema.DRIVE_TQ_COL - 1], "rr_w_" + String(SurfaceRegistry.ids()[-1])) # surface weights (#19)
+	assert_eq(names[names.size() - 1], "rr_drive_tq") # per-wheel drive torque (#26) last
 
 
 func test_buffer_ring_wraps_and_keeps_order() -> void:
@@ -118,3 +119,22 @@ func test_panel_edit_and_reset() -> void:
 	assert_eq(ov._params.size(), 6)
 	var txt := ov.format_text(rec.row, rec)
 	assert_true(txt.contains("n/a"), "missing channels show n/a")
+
+
+func test_car_selection_swaps_drivetrain() -> void: # #26
+	var w := _world()
+	var v: Vehicle = w.vehicle
+	var rec: TelemetryRecorder = w.rec
+	var ov := TelemetryOverlay.new()
+	ov.recorder = rec
+	add_child_autofree(ov)
+	assert_eq(TelemetryOverlay.CARS.size(), 2)
+	assert_eq(v.powertrain.def.layout, PowertrainDefinition.Layout.RWD)
+	ov.select_car(1)
+	assert_eq(v.powertrain.def.layout, PowertrainDefinition.Layout.AWD, "AWD drivetrain active")
+	assert_eq(v.mass, TelemetryOverlay.CARS[1].mass)
+	assert_ne(v.definition, TelemetryOverlay.CARS[1], "vehicle owns a copy of the definition")
+	assert_eq(ov._params.size(), 6, "panel rebuilt for the new car")
+	ov.select_car(0)
+	assert_eq(v.powertrain.def.layout, PowertrainDefinition.Layout.RWD)
+	assert_eq(v.wheels[0].drive_torque, 0.0)

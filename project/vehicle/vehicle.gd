@@ -42,9 +42,31 @@ func _ready() -> void:
 	_apply_definition()
 	_build_wheels()
 	if powertrain_definition == null:
-		powertrain_definition = DEFAULT_POWERTRAIN
+		powertrain_definition = definition.powertrain if definition.powertrain != null else DEFAULT_POWERTRAIN
 	powertrain = Powertrain.new(powertrain_definition)
 	_exclude = [get_rid()]
+
+
+## Car selection (#26): swaps in another car's definition and drivetrain at run time (debug option).
+## Wheels are repositioned for the new mass distribution; the powertrain restarts from idle.
+func set_car(def: VehicleDefinition) -> void:
+	definition = def
+	powertrain_definition = def.powertrain if def.powertrain != null else DEFAULT_POWERTRAIN
+	mass = definition.mass
+	center_of_mass = definition.com_position()
+	inertia = definition.inertia
+	for i in mini(4, wheels.size()):
+		var w := wheels[i]
+		w.position = definition.mount_position(i, _g)
+		w.radius = definition.wheel_radius
+		w.travel = definition.travel
+		w.drive_torque = 0.0
+		w.extra_inertia = 0.0
+	var cs := find_child("Chassis", false, false) as CollisionShape3D
+	if cs != null:
+		(cs.shape as BoxShape3D).size = definition.chassis_size
+		cs.position = Vector3(0.0, definition.chassis_bottom + definition.chassis_size.y * 0.5, 0.0)
+	powertrain = Powertrain.new(powertrain_definition)
 
 
 ## Copies a DriverInputState into the vehicle (clamped) and sets steer angles and brake torques.
@@ -146,16 +168,26 @@ func engine_torque() -> float:
 func step_powertrain(delta: float) -> void:
 	if not powertrain_enabled or powertrain == null:
 		return
-	var dw := powertrain.def.driven_wheels
-	if dw.size() < 2 or wheels.size() <= maxi(dw[0], dw[1]):
+	var dw := powertrain.def.driven_wheels()
+	if wheels.size() < 4:
 		return
-	var l: Wheel = wheels[dw[0]]
-	var r: Wheel = wheels[dw[1]]
-	powertrain.step(delta, throttle, l.omega, r.omega, brake, -linear_velocity.dot(global_transform.basis.z))
-	l.drive_torque = powertrain.torque_left
-	r.drive_torque = powertrain.torque_right
-	l.extra_inertia = powertrain.reflected_inertia
-	r.extra_inertia = powertrain.reflected_inertia
+	var awd := dw.size() == 4
+	# Axle pair handed to `step` as (wl, wr): the rear pair on AWD, the single driven axle otherwise.
+	var a: Wheel = wheels[dw[dw.size() - 2]]
+	var b: Wheel = wheels[dw[dw.size() - 1]]
+	var speed := -linear_velocity.dot(global_transform.basis.z)
+	if awd:
+		powertrain.step(delta, throttle, a.omega, b.omega, brake, speed, wheels[0].omega, wheels[1].omega)
+		wheels[0].drive_torque = powertrain.torque_front_left
+		wheels[1].drive_torque = powertrain.torque_front_right
+		wheels[0].extra_inertia = powertrain.reflected_inertia
+		wheels[1].extra_inertia = powertrain.reflected_inertia
+	else:
+		powertrain.step(delta, throttle, a.omega, b.omega, brake, speed)
+	a.drive_torque = powertrain.torque_left
+	b.drive_torque = powertrain.torque_right
+	a.extra_inertia = powertrain.reflected_inertia
+	b.extra_inertia = powertrain.reflected_inertia
 
 
 ## Integrate wheel spin and (optionally) apply tire forces Fx, Fy. Fixed tick only.

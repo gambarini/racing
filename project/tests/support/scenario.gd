@@ -30,6 +30,11 @@ var ticks := 120
 var forward_offset := 0.0
 var initial_speed := 0.0 ## m/s along the heading at t = 0
 var controller := Callable()
+## Car to drive (#26); null = the reference car. Its `powertrain` field picks the drivetrain.
+var car: VehicleDefinition
+## Optional Callable(world: Node3D) run right after the track is instanced (e.g. to add a spawn
+## marker or a longer surface patch).
+var world_setup := Callable()
 var csv_path := "" ## "" = no CSV; "user://x.csv" writes the telemetry buffer after the run
 
 
@@ -54,6 +59,8 @@ static func input_at(list: Array, t: float) -> Dictionary:
 func run() -> Dictionary:
 	var world: Node3D = load(PROVING_GROUND).instantiate()
 	tree.root.add_child(world)
+	if world_setup.is_valid():
+		world_setup.call(world)
 	var marker: Node3D = world.get_node(spawn)
 	var v: Vehicle = load("res://vehicle/vehicle.gd").new()
 	var xf := marker.global_transform
@@ -69,6 +76,8 @@ func run() -> Dictionary:
 		xf.basis = Basis(fwd.cross(up), up, -fwd)
 		xf.origin = hit.position + up * (SPAWN_LIFT + 0.3)
 	v.transform = xf
+	if car != null:
+		v.definition = car
 	world.add_child(v)
 	if initial_speed != 0.0:
 		v.linear_velocity = -v.global_transform.basis.z * initial_speed

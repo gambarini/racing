@@ -19,7 +19,9 @@ const N_CHASSIS := 9
 const N_WHEEL_CH := 8
 const N_POWERTRAIN := 4
 const N_SURF := 7 ## == SurfaceRegistry.ids().size() (asserted in tests)
-const N_COLS := N_CHASSIS + 4 * N_WHEEL_CH + N_POWERTRAIN + 4 * N_SURF
+## Per-wheel drive torque in Nm (#26), appended last: fl_drive_tq .. rr_drive_tq.
+const DRIVE_TQ_COL := N_CHASSIS + 4 * N_WHEEL_CH + N_POWERTRAIN + 4 * N_SURF
+const N_COLS := DRIVE_TQ_COL + 4
 const POWERTRAIN_COL := N_CHASSIS + 4 * N_WHEEL_CH
 const SURFACE_CH := 7
 
@@ -33,6 +35,8 @@ static func column_names() -> PackedStringArray:
 	for w in WHEELS:
 		for id in SurfaceRegistry.ids():
 			out.append("%s_w_%s" % [w, id])
+	for w in WHEELS:
+		out.append(w + "_drive_tq")
 	return out
 
 
