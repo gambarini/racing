@@ -49,9 +49,11 @@ func record(dt: float) -> void:
 		var a := (vel - _prev_vel) / dt
 		r[3] = a.dot(basis.x) / G
 		r[4] = a.dot(-basis.z) / G
+		r[TelemetrySchema.VERT_G_COL] = a.y / G
 	else:
 		r[3] = 0.0
 		r[4] = 0.0
+		r[TelemetrySchema.VERT_G_COL] = 0.0
 	_prev_vel = vel
 	_have_prev = true
 	if driver_input != null:

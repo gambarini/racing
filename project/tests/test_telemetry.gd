@@ -38,7 +38,8 @@ func test_schema_columns() -> void:
 	assert_eq(names[TelemetrySchema.POWERTRAIN_COL], "rpm") # powertrain channels (#11) follow the wheel block
 	assert_eq(names[TelemetrySchema.POWERTRAIN_COL + 3], "engine_torque")
 	assert_eq(names[TelemetrySchema.DRIVE_TQ_COL - 1], "rr_w_" + String(SurfaceRegistry.ids()[-1])) # surface weights (#19)
-	assert_eq(names[names.size() - 1], "rr_drive_tq") # per-wheel drive torque (#26) last
+	assert_eq(names[TelemetrySchema.VERT_G_COL - 1], "rr_drive_tq") # per-wheel drive torque (#26)
+	assert_eq(names[names.size() - 1], "vert_g") # vertical acceleration (#104) last
 
 
 func test_buffer_ring_wraps_and_keeps_order() -> void:

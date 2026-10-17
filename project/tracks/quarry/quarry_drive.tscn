@@ -1,0 +1,41 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://tracks/quarry/quarry_drive.gd" id="1_qd"]
+[ext_resource type="PackedScene" path="res://tracks/quarry/quarry.tscn" id="2_q"]
+[ext_resource type="Script" path="res://vehicle/vehicle.gd" id="3_veh"]
+[ext_resource type="Script" path="res://vehicle/vehicle_visual.gd" id="4_vis"]
+[ext_resource type="Script" path="res://core/driver_input.gd" id="5_di"]
+[ext_resource type="Script" path="res://debug/telemetry_recorder.gd" id="6_rec"]
+[ext_resource type="Script" path="res://debug/telemetry_overlay.gd" id="7_ov"]
+[ext_resource type="PackedScene" path="res://camera/chase_camera.tscn" id="8_cam"]
+
+[node name="QuarryDrive" type="Node3D"]
+script = ExtResource("1_qd")
+
+[node name="Quarry" parent="." instance=ExtResource("2_q")]
+
+[node name="Vehicle" type="RigidBody3D" parent="."]
+script = ExtResource("3_veh")
+
+[node name="Visual" type="Node3D" parent="Vehicle"]
+script = ExtResource("4_vis")
+
+[node name="DriverInput" type="Node" parent="."]
+script = ExtResource("5_di")
+
+[node name="TelemetryRecorder" type="Node" parent="." node_paths=PackedStringArray("vehicle", "driver_input")]
+script = ExtResource("6_rec")
+vehicle = NodePath("../Vehicle")
+driver_input = NodePath("../DriverInput")
+capacity = 16384
+
+[node name="TelemetryOverlay" type="CanvasLayer" parent="." node_paths=PackedStringArray("recorder")]
+script = ExtResource("7_ov")
+recorder = NodePath("../TelemetryRecorder")
+
+[node name="ChaseCamera" parent="." node_paths=PackedStringArray("target") instance=ExtResource("8_cam")]
+target = NodePath("../Vehicle")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.25, 0.433, 0, 0.866, 0.5, -0.5, -0.433, 0.75, 0, 20, 0)
+light_energy = 1.2

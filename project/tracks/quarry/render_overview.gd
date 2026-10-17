@@ -1,4 +1,6 @@
-## Renders the Quarry top-down overview (hillshaded surface map, centre line, gates, start) to
+## Renders the Quarry top-down overview (hillshaded surface map, centre line, gates, start, joker
+## detour in orange, the two scripted first-corner lines in cyan/magenta, crest/compression
+## markers, joker entry/rejoin in green) to
 ## res://tracks/quarry/quarry_overview.png (4 px per terrain cell).
 ## Run: godot --headless --path project -s res://tracks/quarry/render_overview.gd
 extends SceneTree
@@ -42,6 +44,20 @@ func _main() -> void:
 	for off in q.track.gate_offsets:
 		_dot(img, q.track.sample(off)["position"], Color(1, 0.1, 0.1), 4)
 	_dot(img, q.track.sample(q.track.gate_offsets[0])["position"], Color(1, 1, 0), 6)
+	var jl := q.joker_line
+	for i in int(jl.get_baked_length() / 2.0):
+		_dot(img, jl.sample_baked(i * 2.0), Color(1.0, 0.55, 0.05), 1)
+	for pair in [[&"tarmac", Color(0.2, 0.9, 1.0)], [&"inside", Color(1.0, 0.2, 0.9)]]:
+		var pts := q.route_points(&"main", pair[0])
+		for i in range(0, pts.size(), 2):
+			var s := q._ss[i]
+			if s > 190.0 and s < 330.0:
+				_dot(img, pts[i], pair[1], 1)
+	for f in Quarry.FEATURES:
+		var col := Color(1, 0, 1) if f["kind"] == "crest" else Color(0.2, 0.3, 1.0)
+		_dot(img, q.track.sample(f["s"])["position"], col, 4)
+	for mk in ["JokerEntry", "JokerRejoin"]:
+		_dot(img, (q.get_node(mk) as Node3D).position, Color(0.1, 1, 0.2), 5)
 	img.save_png("res://tracks/quarry/quarry_overview.png")
 	print("saved ", ProjectSettings.globalize_path("res://tracks/quarry/quarry_overview.png"))
 	quit()
