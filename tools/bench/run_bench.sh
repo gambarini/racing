@@ -14,6 +14,9 @@ mode="${1:-vehicle}"
 if [ "$mode" = vehicle ] || [ "$mode" = all ]; then
   "$GODOT" --headless --fixed-fps 120 --path project -s ../tools/bench/vehicle_bench.gd
 fi
+if [ "$mode" = terrain ]; then # #22: needs a window for render numbers
+  "$GODOT" --path project -s ../tools/bench/terrain_bench.gd
+fi
 if [ "$mode" = core ] || [ "$mode" = all ]; then
   tools/bench/gdext/build.sh || echo "native build failed: the core bench will report not measured"
   "$GODOT" --headless --fixed-fps 120 --path project -s ../tools/bench/wheel_core_bench.gd
