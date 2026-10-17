@@ -99,6 +99,8 @@ func _initialize() -> void:
 	var max_step := 0.0
 	var monotone := true
 	var n_mid := 0
+	var min_mu := 10.0
+	var max_mu := -10.0
 	var w := d.wheels[0]
 	for i in 90:
 		d.linear_velocity = -d.global_transform.basis.z * 30.0
@@ -111,11 +113,14 @@ func _initialize() -> void:
 		if mu > 0.651 and mu < 0.999:
 			n_mid += 1
 		prev = mu
-	# Linear ramp: step <= delta_mu * (v dt / width) = 0.35 * 0.25 / 0.5 = 0.175 per tick.
-	var bound := 0.35 * 30.0 * DT / 0.5 + 1e-3
+		min_mu = minf(min_mu, mu)
+		max_mu = maxf(max_mu, mu)
+	# Ruling: step <= |delta| * (v dt / width) * 1.05 = 0.35 * 0.25 / 0.5 * 1.05 = 0.184 per tick.
+	var bound := 0.35 * 30.0 * DT / 0.5 * 1.05 # design ruling #19 (PR #115)
 	print("continuity: max per-tick peak_mu_scale step = ", max_step, " (ramp-implied bound ", bound, "), final=", prev)
 	check(absf(prev - 0.65) < 1e-3, "wheel ends on gravel after the transition")
 	check(monotone, "mu_peak scale monotone across the transition")
+	check(min_mu >= 0.65 - 1e-6 and max_mu <= 1.0 + 1e-6, "no overshoot outside the two surfaces' values")
 	check(max_step <= bound, "per-tick step bounded by the linear ramp (no pops)")
 	d.get_parent().queue_free()
 	await frames(2)
