@@ -208,3 +208,26 @@ func _frac(i: int, at: float) -> float:
 	if l <= 1e-9:
 		return 0.0
 	return clampf((fposmod(at, length) - s[i]) / l, 0.0, 1.0)
+
+
+## --- Index + fraction accessors (#28): a per-tick caller resolves `sample_index(at)` once and
+## reuses it for several fields instead of one binary search per query. Allocation-free. ---
+
+## Index of the sample at or before arc length `at` in the active variant.
+func sample_index(at: float) -> int:
+	return _src()._index(at)
+
+
+## Interpolation fraction in [0, 1] of `at` inside segment `i` (from `sample_index`).
+func sample_frac(i: int, at: float) -> float:
+	return _src()._frac(i, at)
+
+
+func target_speed_at_index(i: int, f: float) -> float:
+	var d := _src()
+	return lerpf(d.target_speed[i], d.target_speed[(i + 1) % d.s.size()], f)
+
+
+func point_at_index(i: int, f: float) -> Vector3:
+	var d := _src()
+	return d.pos[i].lerp(d.pos[(i + 1) % d.pos.size()], f)

@@ -20,6 +20,8 @@ var recorder: TelemetryRecorder
 var lap_timer: LapTimer
 var time_trial: TimeTrial ## ghost recorder/replay (#132); observes the timer after this node steps it
 var autopilot: QuarryDriver ## null = human driving through DriverInput
+var ai_driver: AiDriver ## #28: racing-line AI; writes the same DriverInput state as a human (null = off)
+var ai_debug: AiDriverDebug
 var offmap_ticks := 0 ## ticks with the car outside the surface map
 var grass_ticks := 0 ## ticks with a grounded wheel whose dominant surface is grass
 
@@ -38,6 +40,17 @@ func _ready() -> void:
 	place_on_grid(grid_slot)
 
 
+## Switches the car to the racing-line AI (#28) and adds its debug draw (F4, hidden by default).
+func start_ai(line: RacingLine, telemetry_capacity := 0) -> AiDriver:
+	ai_driver = AiDriver.new()
+	ai_driver.setup(line, telemetry_capacity)
+	ai_debug = AiDriverDebug.new()
+	ai_debug.driver = ai_driver
+	ai_debug.vehicle = vehicle
+	add_child(ai_debug)
+	return ai_driver
+
+
 ## Puts the car on grid slot `slot` (0 = pole), at rest.
 func place_on_grid(slot: int) -> void:
 	var xf := quarry.track.grid_transform(slot)
@@ -50,6 +63,8 @@ func place_on_grid(slot: int) -> void:
 func _physics_process(delta: float) -> void:
 	if autopilot != null:
 		autopilot.drive(vehicle, driver_input.state, delta)
+	elif ai_driver != null:
+		ai_driver.drive(vehicle, driver_input.state, delta)
 	vehicle.apply_input(driver_input.state)
 	lap_timer.step(vehicle.global_position)
 	var p := vehicle.global_position
