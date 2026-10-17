@@ -41,7 +41,7 @@ Order:
 2. Then by `milestone_order`, then `priority:high` first, then issue number ascending.
 Skip issues labelled `blocked`, `needs:split` (the split children are in the queue), issues already in flight, and milestone `Later (optional)`.
 
-**Board sync:** on each queue refresh, add open issues that are missing from the Project (agents should add the ones they create, but check): compare the issue numbers with `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[].content.number]'`, then `gh project item-add <number> --owner <owner> --url <issue url>` and cache the new item id in `project_items`.
+**Board sync:** on each queue refresh, add open issues that are missing from the Project (agents should add the ones they create, but check): compare the issue numbers with `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[].content.number]'`, then `gh project item-add <number> --owner <owner> --url <issue url>` and cache the new item id in `project_items`. Also rebuild the item-id cache whenever an agent reports `NEW_ISSUES`, before you edit those items' Status: `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[]|{key:(.content.number|tostring),value:.id}]|from_entries' > <state_dir>/project_items.json`. A stale cache makes `item-edit` fail with "field-id must be provided".
 
 **Role for an item:** first matching `role_by_label` entry by its `area:*` labels, else `default`. `area:design` items go to `game-designer` directly.
 
@@ -54,8 +54,12 @@ For each picked issue `#n` (set Project Status → In Progress with `gh project 
 2. **Build** — launch the role's agent with `isolation: "worktree"`, `run_in_background: true`. If the issue also needs art (`NEEDS: art` from a dev, or the criteria mention a model), launch `technical-artist` for a sub-issue in parallel when pacing allows.
 3. **QA** — when the build agent returns a PR: launch `qa-tester` (`isolation: "worktree"`, background).
    - FAIL → relaunch the **same role** with the QA findings (max 2 fix rounds per item, then label `blocked`, comment why, move on).
+   - **Builder returns `partial` + `NEEDS: design`** (a criterion can't be met as written): launch `game-designer` with the builder's measured numbers, and ask for a ruling posted as a "Design decision" PR comment. Then send the ruling to the **same builder** with `SendMessage` (it keeps its context; a new agent re-derives everything). This counts as a fix round. If the designer's ruling is an untested estimate and the next round fails again, label `blocked` instead of a third round.
+   - **Tuning items:** if a builder reports that a no-change control run already fails the gate, don't send another tuning round. Label `blocked` with the control result and recommend a design/tech review of the scenario or model.
+   - **Performance items:** don't run a benchmark-dependent build or QA in parallel with other worktree agents (machine load skews timings by 2–3×). Dispatch it alone, and judge a perf verdict only from interleaved before/after runs.
 4. **Review** — from milestone `separate_review_from_milestone` onwards, and only for PRs that change code: launch `tech-reviewer` after QA PASS. CHANGES with blocking findings → one fix round, then QA again.
-5. **Merge** (only if `merge_policy` allows): `gh pr ready <pr>` if draft and complete, then `gh pr merge <pr> --squash --delete-branch`. Judge success by `gh pr view <pr> --json state --jq .state` == `MERGED`, not the exit code (deleting the local branch can fail while a worktree still holds it). Fetch/pull `base_branch` in the main checkout. Set Project Status → Done (the issue closes via `Closes #n`). Then run the worktree cleanup (§6) for this item's worktrees.
+5. **Merge** (only if `merge_policy` allows): first `gh pr checks <pr>`: every check must be `pass`. QA PASS on a pending check isn't enough. If checks are pending, wait with a background `gh pr checks <pr> --watch --interval 20` and end your turn. If `main` moved in the same area since QA ran (another merge touched the same system), have the reviewer, or a quick QA rerun, verify the PR merged with `origin/main` before merging. Then `gh pr ready <pr>` if draft and complete, then `gh pr merge <pr> --squash --delete-branch`. Judge success by `gh pr view <pr> --json state --jq .state` == `MERGED`, not the exit code (deleting the local branch can fail while a worktree still holds it). Fetch/pull `base_branch` in the main checkout. Set Project Status → Done (the issue closes via `Closes #n`). Then run the worktree cleanup (§6) for this item's worktrees.
+   - **Before any cleanup**, `TaskStop` every agent of this item whose task notification said "waiting on its own background work". Agents sometimes hand back their report but leave a background command running, and that keeps their worktree in use.
 6. Record the item outcome, duration and usage cost in state.
 
 New issues created by agents (`qa:found`, sub-issues) enter the queue automatically on the next queue refresh; refresh the queue after every merge, not on every wake.
@@ -99,7 +103,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
   1. Clone `wiki_git` into a temp dir and run `git config commit.gpgsign false` there (wiki commits are unsigned).
   2. Write the report as `Build-Session-<date>.md` (add `-2`, `-3` for a second session the same day). Write issue/PR refs as links (`[#n](https://github.com/<repo>/issues/n)`), because wiki pages don't auto-link `#n`.
   3. Add one row at the top of the table in `Build-Sessions.md`: date, duration, merged count, one-line highlights, `[[Build Session <date>]]`.
-  4. Commit and push. If the push is rejected (a designer pushed meanwhile), `git pull --rebase` and push again, up to 3 times.
+  4. Commit and push with the explicit URL, `git push https://github.com/gambarini/racing.wiki.git HEAD:master` (pre-approved in `.claude/settings.json`). If the push is rejected (a designer pushed meanwhile), `git pull --rebase` and push again, up to 3 times.
 - Final message to the user: ≤12 lines summary + link to the wiki session page (`<wiki_url>/Build-Session-<date>`).
 
 ## 6. Keeping the orchestrator alive and lean (long runs)
@@ -112,6 +116,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 - **Watchdog wakes:** when a background `sleep` exits, run `date` and compare with `wind_down_at` / `end_at` before acting. If it exited early (killed, timed out), re-arm it for the remaining seconds instead of winding down.
 - **Worktree cleanup:** agent worktrees are not removed automatically once they hold commits. After an item merges (or is abandoned) run `git -C <main_checkout> worktree list --porcelain`, `git worktree remove --force <path>` for worktrees whose branch is `issue-<n>-*` of that item or detached at an already-merged commit, then `git worktree prune` and `git branch -D` the merged local branches. Never remove a worktree of an in-flight agent. Worktrees can stay **locked** with the reason `claude agent agent-<id> (pid …)`, where the pid is this orchestrator session, not the agent; once that agent id is no longer in `in_flight`, remove it with `git worktree remove -f -f <path>`.
 - Between events, end your turn: background agents and the watchdog wake you. Don't poll and don't sleep in the foreground.
+- An agent's report can arrive twice: as its hand-back message and again in the task notification, or repeated after a resume. Act on each report once. Check `state.json` (role/agent of that item) before dispatching the next step, so the same QA or merge isn't launched twice.
 - Progress lines to the user: one line per state change (dispatched / PR / QA verdict / merged / paused), nothing else.
 
 ## 7. state.json schema
