@@ -204,8 +204,11 @@ func step_wheels(delta: float) -> void:
 	var body_fwd := -global_transform.basis.z
 	var gv := Vector3.DOWN * _g * wheel_mass # gravity on one wheel's share of the mass
 	for w in wheels:
-		var surf := SurfaceBlend.blend(w.surface_weights)
-		var tp := _tire_for(w.surface_weights, surf)
+		if w.blend_def == null:
+			w.blend_def = SurfaceDefinition.new()
+			w.blend_tire = TireParams.new()
+		var surf := SurfaceBlend.blend_into(w.weight_ids, w.weights, w.weight_count, w.blend_def)
+		var tp := _tire_for(w, surf)
 		var fx_body := 0.0
 		var fy_body := 0.0
 		var fwd := Vector3.ZERO
@@ -287,15 +290,14 @@ func step_wheels(delta: float) -> void:
 			_apply_resistance(w, surf, vel, wheel_mass, delta, pos)
 
 
-## Tire parameters for a wheel's surface weights. Single-surface wheels use a per-id cache;
-## blended wheels derive a fresh (cheap) TireParams from the weight-averaged definition (#19).
-func _tire_for(weights: Dictionary, surf: SurfaceDefinition) -> TireParams:
-	if weights.size() != 1:
-		return TireParams.for_surface(tire_params, surf)
-	var id: StringName = weights.keys()[0]
-	if not _surface_tires.has(id):
-		_surface_tires[id] = TireParams.for_surface(tire_params, surf)
-	return _surface_tires[id]
+## Tire parameters for a wheel's surface. Single-surface wheels (registry definition) use a
+## per-definition cache; blended wheels refill the wheel's scratch TireParams in place (#19, #158).
+func _tire_for(w: Wheel, surf: SurfaceDefinition) -> TireParams:
+	if surf == w.blend_def:
+		return TireParams.for_surface_into(tire_params, surf, w.blend_tire)
+	if not _surface_tires.has(surf):
+		_surface_tires[surf] = TireParams.for_surface(tire_params, surf)
+	return _surface_tires[surf]
 
 
 ## Rolling resistance and deformation drag (#12): a force against the contact-point velocity in

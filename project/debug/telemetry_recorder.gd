@@ -82,7 +82,7 @@ func record(dt: float) -> void:
 	for i in mini(4, vehicle.wheels.size()):
 		var w: Wheel = vehicle.wheels[i]
 		for s in mini(reg.size(), TelemetrySchema.N_SURF):
-			r[TelemetrySchema.weight_col(i, s)] = float(w.surface_weights.get(reg[s], 0.0)) if w.is_grounded else 0.0
+			r[TelemetrySchema.weight_col(i, s)] = w.weight_of(reg[s]) if w.is_grounded else 0.0
 	if vehicle.powertrain != null:
 		var pc := TelemetrySchema.POWERTRAIN_COL
 		r[pc] = vehicle.rpm()
