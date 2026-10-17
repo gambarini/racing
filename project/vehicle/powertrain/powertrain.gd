@@ -52,7 +52,10 @@ func engine_torque() -> float:
 
 
 ## One physics tick. `wl`, `wr` are the driven wheels' speeds (rad/s, + = forward).
-func step(dt: float, throttle: float, wl: float, wr: float) -> void:
+## `brake` (0..1) and `speed` (signed forward m/s) drive the R/N/1 selection (#108).
+func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed := 0.0) -> void:
+	if gearbox.select(dt, throttle, brake, speed):
+		locked = false
 	var ratio := gearbox.total_ratio()
 	var w_drive := ratio * 0.5 * (wl + wr)
 	rpm_driveline = w_drive / RPM_TO_RAD

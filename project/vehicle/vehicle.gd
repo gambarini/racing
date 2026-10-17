@@ -131,7 +131,7 @@ func step_powertrain(delta: float) -> void:
 		return
 	var l: Wheel = wheels[dw[0]]
 	var r: Wheel = wheels[dw[1]]
-	powertrain.step(delta, throttle, l.omega, r.omega)
+	powertrain.step(delta, throttle, l.omega, r.omega, brake, -linear_velocity.dot(global_transform.basis.z))
 	l.drive_torque = powertrain.torque_left
 	r.drive_torque = powertrain.torque_right
 	l.extra_inertia = powertrain.reflected_inertia
