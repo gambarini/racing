@@ -64,7 +64,12 @@ func engine_torque() -> float:
 ## `brake` (0..1) and `speed` (signed forward m/s) drive the R/N/1 selection (#108).
 ## Non-AWD layouts only; AWD cars must use `step_awd` (the front wheel speeds are required there).
 func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed := 0.0) -> void:
-	assert(def.layout != PowertrainDefinition.Layout.AWD, "AWD powertrain: call step_awd()")
+	if def.layout == PowertrainDefinition.Layout.AWD:
+		# Release-safe guard (asserts are stripped): report once, then fall back to the AWD
+		# path with the front wheels assumed to match the rear ones.
+		_report_misuse()
+		_step(dt, throttle, wl, wr, brake, speed, wl, wr)
+		return
 	_step(dt, throttle, wl, wr, brake, speed, 0.0, 0.0)
 
 
@@ -73,6 +78,19 @@ func step_awd(dt: float, throttle: float, wl: float, wr: float, wfl: float, wfr:
 		brake := 0.0, speed := 0.0) -> void:
 	assert(def.layout == PowertrainDefinition.Layout.AWD, "step_awd() on a non-AWD powertrain")
 	_step(dt, throttle, wl, wr, brake, speed, wfl, wfr)
+
+
+## Set by tests to keep the expected misuse error out of CI logs.
+var silence_misuse_error := false
+var _misuse_reported := false
+
+
+func _report_misuse() -> void:
+	if _misuse_reported:
+		return
+	_misuse_reported = true
+	if not silence_misuse_error:
+		push_error("Powertrain.step() called on an AWD layout; use step_awd(). Falling back to front wheels = rear wheels.")
 
 
 func _step(dt: float, throttle: float, wl: float, wr: float, brake: float, speed: float,

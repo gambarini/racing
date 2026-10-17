@@ -252,3 +252,15 @@ func test_gearbox_never_reverses_while_moving() -> void:
 	for i in 600:
 		gb.select(DT, 0.0, 0.0, 0.6)
 	assert_eq(gb.gear, 1, "no neutral while moving either")
+
+
+func test_step_on_awd_falls_back_safely() -> void:
+	d.layout = PowertrainDefinition.Layout.AWD
+	var pt := Powertrain.new(d)
+	pt.silence_misuse_error = true
+	for i in 120:
+		pt.step(DT, 1.0, 20.0, 20.0)
+	assert_true(is_finite(pt.torque_left) and is_finite(pt.torque_right), "rear finite")
+	assert_true(is_finite(pt.torque_front_left) and is_finite(pt.torque_front_right), "front finite")
+	assert_ne(pt.torque_front_left, 0.0, "front axle driven by the AWD split")
+	assert_ne(pt.torque_left, 0.0, "rear axle driven")
