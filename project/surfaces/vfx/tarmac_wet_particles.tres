@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SurfaceParticleEffect" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://surfaces/vfx/surface_particle_effect.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+kind = &"splash"
+max_amount = 60
+lifetime = 0.7
+roll_rate = 0.35
+color = Color(0.8, 0.88, 0.95, 0.5)
+size = 0.15
+launch_speed = 2.5
+upward_bias = 0.7
+gravity = -6.0
