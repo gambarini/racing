@@ -8,6 +8,10 @@ const _PATHS := {
 	&"tarmac": "res://surfaces/tarmac.tres",
 	&"gravel": "res://surfaces/gravel.tres",
 	&"mud": "res://surfaces/mud.tres",
+	&"tarmac_wet": "res://surfaces/tarmac_wet.tres",
+	&"dirt": "res://surfaces/dirt.tres",
+	&"grass": "res://surfaces/grass.tres",
+	&"deep_mud": "res://surfaces/deep_mud.tres",
 }
 
 static var _defs: Dictionary = {}
