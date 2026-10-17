@@ -27,6 +27,7 @@ var _sector_start_tick := 0
 var _sector_ticks: Array[int] = []
 var _joker := false
 var _has_prev := false
+var _awaiting_line := false  ## standing start: the first gate-0 crossing after the signal is not a lap end
 var _prev := Vector3.ZERO
 
 
@@ -56,7 +57,9 @@ func _crossings(a: Vector3, b: Vector3) -> void:
 	for i in gates.size():
 		if not gates[i].crossed_by(a, b):
 			continue
-		if (running or i == 0) and (i == next_gate or (i == 0 and next_gate == gates.size())):
+		if _awaiting_line and i == 0:
+			_awaiting_line = false  # grid to line: lap 1 keeps timing from the start signal
+		elif (running or i == 0) and (i == next_gate or (i == 0 and next_gate == gates.size())):
 			_accept(i)
 		else:
 			out_of_order_crossings += 1
@@ -90,6 +93,16 @@ func _accept(i: int) -> void:
 		_close_sector()
 	last_gate_crossed = i
 	next_gate = i + 1
+
+
+## Standing-start mode (#141): lap 1 is timed from this explicit start signal (call it on the
+## tick the race starts); the first gate-0 crossing afterwards just clears the grid and laps 2+
+## run gate-0 to gate-0. Without this call the timer stays in flying-lap mode.
+func start_standing() -> void:
+	_start_lap()
+	next_gate = 1
+	last_gate_crossed = 0
+	_awaiting_line = true
 
 
 func _start_lap() -> void:

@@ -73,3 +73,27 @@ func test_penalty_added_only_while_running_and_in_lap_time() -> void:
 	var rec: Dictionary = timer.laps[0]
 	assert_almost_eq(rec["time"], rec["raw_time"] + 5.0, 1e-6)
 	assert_eq(timer.penalty_ticks, 0, "penalty does not carry into the next lap")
+
+
+func test_slow_opposing_velocity_never_flags() -> void:
+	var d := WrongWayDetector.new(DT)
+	_run(d, -T * 2.0, 5.0)
+	assert_false(d.wrong_way, "2 m/s is below the 3 m/s floor")
+
+
+func test_fast_opposing_velocity_flags_at_two_seconds() -> void:
+	var d := WrongWayDetector.new(DT)
+	_run(d, -T * 4.0, 1.95)
+	assert_false(d.wrong_way)
+	_run(d, -T * 4.0, 0.1)
+	assert_true(d.wrong_way)
+
+
+func test_flagged_car_slowing_below_floor_clears_after_half_second() -> void:
+	var d := WrongWayDetector.new(DT)
+	_run(d, -T * 20.0, 2.1)
+	assert_true(d.wrong_way)
+	_run(d, -T * 2.0, 0.45)
+	assert_true(d.wrong_way, "not yet at 0.45 s")
+	_run(d, -T * 2.0, 0.1)
+	assert_false(d.wrong_way, "cleared after 0.5 s below the floor")
