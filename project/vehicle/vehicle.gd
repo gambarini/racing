@@ -127,6 +127,26 @@ func _physics_process(delta: float) -> void:
 	step_wheels(delta)
 
 
+## Clear all driver and drivetrain state after a teleport (reset-to-track, #106): wheel spin,
+## slip, anchors, inputs and the powertrain (back to first gear at idle).
+func reset_dynamics() -> void:
+	steer = 0.0
+	throttle = 0.0
+	brake = 0.0
+	handbrake = false
+	for w in wheels:
+		w.omega = 0.0
+		w.kappa = 0.0
+		w.alpha = 0.0
+		w.steer_angle = 0.0
+		w.drive_torque = 0.0
+		w.extra_inertia = 0.0
+		w.brake_torque = 0.0
+		w.anchored = false
+	if powertrain != null:
+		powertrain = Powertrain.new(powertrain_definition)
+
+
 ## Engine rpm, gear (-1 R, 0 N, 1..n), clutch slip (rpm, + = engine faster) and engine torque (Nm).
 func rpm() -> float:
 	return powertrain.rpm() if powertrain != null else 0.0
