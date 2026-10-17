@@ -27,8 +27,18 @@ func duration() -> float:
 
 func add_sample(xf: Transform3D, steer: float, throttle: float, brake: float, handbrake: bool) -> void:
 	var q := xf.basis.get_rotation_quaternion()
-	poses.append_array(PackedFloat32Array([xf.origin.x, xf.origin.y, xf.origin.z, q.x, q.y, q.z, q.w]))
-	inputs.append_array(PackedFloat32Array([steer, throttle, brake, 1.0 if handbrake else 0.0]))
+	# push_back grows the buffers geometrically: no temporary arrays per sample.
+	poses.push_back(xf.origin.x)
+	poses.push_back(xf.origin.y)
+	poses.push_back(xf.origin.z)
+	poses.push_back(q.x)
+	poses.push_back(q.y)
+	poses.push_back(q.z)
+	poses.push_back(q.w)
+	inputs.push_back(steer)
+	inputs.push_back(throttle)
+	inputs.push_back(brake)
+	inputs.push_back(1.0 if handbrake else 0.0)
 
 
 func pose_at_index(i: int) -> Transform3D:

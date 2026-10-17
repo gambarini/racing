@@ -43,8 +43,7 @@ func step_state() -> void:
 	var pos := vehicle.global_position
 	if timer != null:
 		timer.step(pos)
-	var s := track.sample(track.nearest_offset(pos))
-	detector.step(vehicle.linear_velocity, s["forward"])
+	detector.step(vehicle.linear_velocity, track.forward_at(track.nearest_offset(pos)))
 
 
 func reset_to_track() -> void:

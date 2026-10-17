@@ -13,7 +13,10 @@ func before_each() -> void:
 
 func _launch(pt: Powertrain, w_front: float, w_rear: float, ticks := 240) -> void:
 	for i in ticks:
-		pt.step(DT, 1.0, w_rear, w_rear, 0.0, 5.0, w_front, w_front)
+		if pt.def.layout == PowertrainDefinition.Layout.AWD:
+			pt.step_awd(DT, 1.0, w_rear, w_rear, w_front, w_front, 0.0, 5.0)
+		else:
+			pt.step(DT, 1.0, w_rear, w_rear, 0.0, 5.0)
 
 
 func test_equal_grip_split_matches_data_for_all_types() -> void:
@@ -87,9 +90,9 @@ func test_facade_awd_inertia_shared_over_four_wheels() -> void:
 	var a := Powertrain.new(d)
 	var rd := PowertrainDefinition.new()
 	var r := Powertrain.new(rd)
-	for pt in [a, r]:
-		for i in 600:
-			pt.step(DT, 1.0, 30.0, 30.0, 0.0, 10.0, 30.0, 30.0)
+	for i in 600:
+		a.step_awd(DT, 1.0, 30.0, 30.0, 30.0, 30.0, 0.0, 10.0)
+		r.step(DT, 1.0, 30.0, 30.0, 0.0, 10.0)
 	assert_gt(r.reflected_inertia, 0.0)
 	assert_almost_eq(a.reflected_inertia, r.reflected_inertia * 0.5, 1e-6)
 

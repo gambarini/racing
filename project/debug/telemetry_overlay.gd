@@ -159,7 +159,7 @@ func select_car(index: int) -> void:
 	var v: Vehicle = recorder.vehicle if recorder != null else null
 	if v == null or index < 0 or index >= CARS.size():
 		return
-	var def := CARS[index].duplicate() as VehicleDefinition
+	var def := CARS[index].duplicate(true) as VehicleDefinition
 	v.set_car(def)
 	_build_panel()
 

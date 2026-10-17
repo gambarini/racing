@@ -29,6 +29,7 @@ var torque_front_axle := 0.0 ## Nm into the front axle (after the centre diff); 
 var torque_rear_axle := 0.0
 var reflected_inertia := 0.0 ## kg m^2 to add to each driven wheel while locked
 var shifts := 0
+var driven := PackedInt32Array() ## wheel indices fed by the diffs, cached at construction (per-tick safe)
 var _prev_w_drive := 0.0
 var _inertia_share := 0.5 ## engine inertia is reflected onto n driven wheels: 1/n each
 
@@ -38,6 +39,7 @@ func _init(definition: PowertrainDefinition) -> void:
 	engine = EngineModel.new(def)
 	gearbox = Gearbox.new(def)
 	_inertia_share = 0.25 if def.layout == PowertrainDefinition.Layout.AWD else 0.5
+	driven = def.driven_wheels()
 
 
 func rpm() -> float:
@@ -60,8 +62,21 @@ func engine_torque() -> float:
 ## One physics tick. `wl`, `wr` are the driven axle's wheel speeds (rad/s, + = forward): the
 ## rear axle for RWD, the front axle for FWD, the rear axle for AWD with `wfl`, `wfr` the front.
 ## `brake` (0..1) and `speed` (signed forward m/s) drive the R/N/1 selection (#108).
-func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed := 0.0,
-		wfl := 0.0, wfr := 0.0) -> void:
+## Non-AWD layouts only; AWD cars must use `step_awd` (the front wheel speeds are required there).
+func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed := 0.0) -> void:
+	assert(def.layout != PowertrainDefinition.Layout.AWD, "AWD powertrain: call step_awd()")
+	_step(dt, throttle, wl, wr, brake, speed, 0.0, 0.0)
+
+
+## AWD layout: `wl`, `wr` are the rear wheel speeds, `wfl`, `wfr` the front ones (all required).
+func step_awd(dt: float, throttle: float, wl: float, wr: float, wfl: float, wfr: float,
+		brake := 0.0, speed := 0.0) -> void:
+	assert(def.layout == PowertrainDefinition.Layout.AWD, "step_awd() on a non-AWD powertrain")
+	_step(dt, throttle, wl, wr, brake, speed, wfl, wfr)
+
+
+func _step(dt: float, throttle: float, wl: float, wr: float, brake: float, speed: float,
+		wfl: float, wfr: float) -> void:
 	var awd := def.layout == PowertrainDefinition.Layout.AWD
 	# Driveline speed: the mean of the driven wheels (all four on AWD).
 	var w_mean := 0.25 * (wl + wr + wfl + wfr) if awd else 0.5 * (wl + wr)

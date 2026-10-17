@@ -168,7 +168,7 @@ func engine_torque() -> float:
 func step_powertrain(delta: float) -> void:
 	if not powertrain_enabled or powertrain == null:
 		return
-	var dw := powertrain.def.driven_wheels()
+	var dw := powertrain.driven
 	if wheels.size() < 4:
 		return
 	var awd := dw.size() == 4
@@ -177,7 +177,7 @@ func step_powertrain(delta: float) -> void:
 	var b: Wheel = wheels[dw[dw.size() - 1]]
 	var speed := -linear_velocity.dot(global_transform.basis.z)
 	if awd:
-		powertrain.step(delta, throttle, a.omega, b.omega, brake, speed, wheels[0].omega, wheels[1].omega)
+		powertrain.step_awd(delta, throttle, a.omega, b.omega, wheels[0].omega, wheels[1].omega, brake, speed)
 		wheels[0].drive_torque = powertrain.torque_front_left
 		wheels[1].drive_torque = powertrain.torque_front_right
 		wheels[0].extra_inertia = powertrain.reflected_inertia
