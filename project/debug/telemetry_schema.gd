@@ -11,10 +11,15 @@ const WHEEL_CHANNELS: Array[String] = ["fz", "kappa", "alpha", "fx", "fy", "trav
 ## Powertrain channels (#11), appended after the wheel block so earlier columns keep their index.
 const POWERTRAIN: Array[String] = ["rpm", "gear", "clutch_slip", "engine_torque"]
 
+## Per-wheel surface weights (#19), appended after the powertrain block: one column per
+## SurfaceRegistry id, named <wheel>_w_<id>, in SurfaceRegistry.ids() order.
+const SURFACE_W_COL := 9 + 4 * 8 + 4 ## first weight column (N_CHASSIS + 4*N_WHEEL_CH + N_POWERTRAIN)
+
 const N_CHASSIS := 9
 const N_WHEEL_CH := 8
 const N_POWERTRAIN := 4
-const N_COLS := N_CHASSIS + 4 * N_WHEEL_CH + N_POWERTRAIN
+const N_SURF := 7 ## == SurfaceRegistry.ids().size() (asserted in tests)
+const N_COLS := N_CHASSIS + 4 * N_WHEEL_CH + N_POWERTRAIN + 4 * N_SURF
 const POWERTRAIN_COL := N_CHASSIS + 4 * N_WHEEL_CH
 const SURFACE_CH := 7
 
@@ -25,6 +30,9 @@ static func column_names() -> PackedStringArray:
 		for c in WHEEL_CHANNELS:
 			out.append(w + "_" + c)
 	out.append_array(POWERTRAIN)
+	for w in WHEELS:
+		for id in SurfaceRegistry.ids():
+			out.append("%s_w_%s" % [w, id])
 	return out
 
 
@@ -38,3 +46,8 @@ static func new_row() -> PackedFloat64Array:
 	r.resize(N_COLS)
 	r.fill(NAN)
 	return r
+
+
+## Column index of wheel `wheel`'s weight for registry surface index `surface` (#19).
+static func weight_col(wheel: int, surface: int) -> int:
+	return SURFACE_W_COL + wheel * N_SURF + surface

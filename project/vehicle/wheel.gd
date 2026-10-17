@@ -9,7 +9,8 @@ var contact_normal := Vector3.UP
 var compression := 0.0 ## m, 0 = full droop
 var compression_rate := 0.0 ## m/s, + = compressing
 var fz := 0.0 ## N, force along the suspension axis
-var surface_id: StringName = &"tarmac"
+var surface_id: StringName = &"tarmac" ## dominant surface (largest weight)
+var surface_weights := {&"tarmac": 1.0} ## surface id -> weight, sums to 1 (#19)
 var hit_distance := INF ## mount-to-ground along the ray (>= radius means hub clear of chassis)
 
 # Spin state (#10). omega is integrated only by Vehicle._physics_process via WheelSpin.
@@ -31,7 +32,8 @@ var travel := 0.2
 
 
 ## Ray from the mount down the body's -Y axis; fills the contact fields except forces.
-func probe(space: PhysicsDirectSpaceState3D, exclude: Array[RID], body_down: Vector3) -> void:
+func probe(space: PhysicsDirectSpaceState3D, exclude: Array[RID], body_down: Vector3,
+		surface_map: SurfaceMap = null) -> void:
 	var from := global_position
 	var q := PhysicsRayQueryParameters3D.create(from, from + body_down * (travel + radius), 1, exclude)
 	var hit := space.intersect_ray(q)
@@ -47,7 +49,9 @@ func probe(space: PhysicsDirectSpaceState3D, exclude: Array[RID], body_down: Vec
 	contact_normal = hit.normal
 	hit_distance = from.distance_to(hit.position)
 	compression = clampf(travel - (hit_distance - radius), 0.0, travel)
-	surface_id = surface_id_of(hit.collider)
+	var collider_id := surface_id_of(hit.collider)
+	surface_weights = SurfaceBlend.resolve_weights(surface_map, contact_point.x, contact_point.z, collider_id)
+	surface_id = SurfaceBlend.dominant(surface_weights)
 
 
 ## Surface id of a collider: metadata `surface_id` first, then a group `surface_<id>`, else tarmac.
