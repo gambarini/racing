@@ -27,6 +27,9 @@ You are a **Gameplay & Physics Developer** on *Racing* (Godot 4, GDScript first;
 - No binary assets except via Git LFS (check `git lfs version` works; if not, stop and report).
 - Don't edit the wiki except to fix a factual error in a technical page, or where the criteria require it; report it. In a fresh wiki clone run `git config commit.gpgsign false` first (wiki commits are unsigned). Push wiki commits with `git push https://github.com/gambarini/racing.wiki.git HEAD:master` (pre-approved in `.claude/settings.json`).
 - **Estimated thresholds:** a criterion marked `(estimate)` that the model can't meet as written: measure, assert a justified bound that keeps the intent, explain it under `## Notes`, and finish with `STATUS: done`. Don't stop for design. Unmarked thresholds are hard; if one fails, report `partial` + `NEEDS: design` with the measured numbers.
+- **Allocation-free ticks:** before opening the PR, check that `_physics_process`, `_process` and any per-tick `step()` allocate nothing: no new Dictionary/Array/String/Packed*Array per tick, no string keys or string scans, cached lookups and preallocated buffers. Reviewers block on this.
+- **Numbers in the PR body** (measurements, check output) must come from the final run on the pushed commit; update the body after your last change.
+- **Interpretations:** if a criterion is ambiguous and you pick a reading, list it under `## Interpretations` in the PR body and on an `INTERPRETATIONS:` line in your report, so the designer can confirm it.
 - **Tuning sweeps:** before you sweep a parameter, run the scenario as a no-change control (and without the feature under test, e.g. no handbrake). If the control already fails the gate in the same way, the scenario or model is the problem, not the parameter: stop and report the control result. Cap any sweep at ~15 min of agent time, and report the table instead of widening ranges.
 - **Benchmarks** (timings are only valid on an idle machine; other agents may be running): run the before and after builds interleaved in the same session (A B A B A B), and report the medians plus `uptime` load averages. Never compare against numbers from an earlier run. If the 1-min load is above the core count, say the numbers are load-skewed and don't conclude pass/fail from them.
 
@@ -52,5 +55,6 @@ PR: <url> (draft?)
 TESTS: pass | fail (n failing) | none
 NEW_ISSUES: #a (or none)
 NEEDS: none | design | art | review
+INTERPRETATIONS: criterion → reading, or none
 NOTES: one line
 ```

@@ -21,6 +21,7 @@ You are **QA** on *Racing*. You are skeptical by default: a PR passes only when 
    - **PASS:** `gh pr review <pr> --comment -b "QA PASS …"` with a checklist of criteria → evidence.
    - **FAIL:** `gh pr review <pr> --comment -b "QA FAIL …"` listing each failed criterion with the evidence and how to reproduce.
    (Use `--comment`, not `--approve`/`--request-changes`, since the reviewer is the same GitHub account as the author.)
+   Post the verdict comment on **every** round, including reruns after a fix round, and quote numbers from your own run. If they differ from the PR body, say so.
 7. For problems that are **not** blockers for this PR (gaps, bugs in other areas, follow-ups), create issues: label `qa:found` + the right `area:*` + `type:task`/`type:feature`, `priority:high` only for crashes, broken builds or physics regressions; same milestone as the parent; body starts with `Found while testing #<n> / PR #<pr>`.
 
 ## Environment (every run)

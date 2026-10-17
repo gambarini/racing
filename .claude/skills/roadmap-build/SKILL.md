@@ -23,6 +23,7 @@ Run these in as few tool calls as possible:
 2. `mcp__ccd_session_mgmt__get_usage` → plan windows (5-hour, weekly) and **this session's** context %. Record a baseline.
    - 5-hour ≥ `five_hour_serial_below_pct` and it resets after `end_at` → tell the user the session can't do real work; stop.
    - Weekly ≥ `weekly_stop_at_pct` → stop.
+   - 5-hour ≥ `five_hour_normal_below_pct` and it resets before `end_at` → tell the user how long the session will run serially or cool down until the reset, and offer to delay the start (AskUserQuestion: *Start now* / *Start at reset*).
    - Context of this session > 30 % → recommend starting the run from a fresh session (`/clear`) and ask whether to continue anyway.
 3. Disk: `df -g <main_checkout>` free GB. Below `min_free_disk_gb` → run the worktree cleanup (§6 *Worktree cleanup*) once, re-check; still below → stop.
 4. Tools: `git lfs version` (blocker for art/level/audio work — if missing, exclude those roles and tell the user `brew install git-lfs && git lfs install`), `gh auth status`, Godot binary `--version`, Blender `--version`.
@@ -56,11 +57,12 @@ For each picked issue `#n` (set Project Status → In Progress with `gh project 
    - FAIL → relaunch the **same role** with the QA findings (max 2 fix rounds per item, then label `blocked`, comment why, move on).
    - **Builder returns `partial` + `NEEDS: design`** (a criterion can't be met as written): launch `game-designer` with the builder's measured numbers, and ask for a ruling posted as a "Design decision" PR comment. Then send the ruling to the **same builder** with `SendMessage` (it keeps its context; a new agent re-derives everything). This counts as a fix round. If the designer's ruling is an untested estimate and the next round fails again, label `blocked` instead of a third round.
    - **Tuning items:** if a builder reports that a no-change control run already fails the gate, don't send another tuning round. Label `blocked` with the control result and recommend a design/tech review of the scenario or model.
+   - **Wiki-only FAIL:** if QA fails only on a wiki criterion and the text is ready (staged, or in the PR body), launch `game-designer` to publish it right away, then rerun QA. Don't leave the PR waiting.
    - **Performance items:** don't run a benchmark-dependent build or QA in parallel with other worktree agents (machine load skews timings by 2–3×). Dispatch it alone, and judge a perf verdict only from interleaved before/after runs.
 4. **Review** — from milestone `separate_review_from_milestone` onwards, and only for PRs that change code: launch `tech-reviewer` after QA PASS. CHANGES with blocking findings → one fix round, then QA again.
 5. **Merge** (only if `merge_policy` allows): first `gh pr checks <pr>`: every check must be `pass`. QA PASS on a pending check isn't enough. If checks are pending, wait with a background `gh pr checks <pr> --watch --interval 20` and end your turn. If `main` moved in the same area since QA ran (another merge touched the same system), have the reviewer, or a quick QA rerun, verify the PR merged with `origin/main` before merging. Then `gh pr ready <pr>` if draft and complete, then `gh pr merge <pr> --squash --delete-branch`. Judge success by `gh pr view <pr> --json state --jq .state` == `MERGED`, not the exit code (deleting the local branch can fail while a worktree still holds it). Fetch/pull `base_branch` in the main checkout. Set Project Status → Done (the issue closes via `Closes #n`). Then run the worktree cleanup (§6) for this item's worktrees.
    - **Before any cleanup**, `TaskStop` every agent of this item whose task notification said "waiting on its own background work". Agents sometimes hand back their report but leave a background command running, and that keeps their worktree in use.
-6. Record the item outcome, duration and usage cost in state.
+6. Record the item outcome, duration and usage cost in state. Also record the reviewer's `NITS:` and the builder's `INTERPRETATIONS:` (if not `none`) under `state.nits` / `state.interpretations` with the issue and PR numbers.
 
 New issues created by agents (`qa:found`, sub-issues) enter the queue automatically on the next queue refresh; refresh the queue after every merge, not on every wake.
 
@@ -99,6 +101,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 - **WIND_DOWN** (watchdog or rule): stop dispatching new items. Let in-flight build agents finish; run QA/merge only if it fits before `end_at`.
 - **HARD_STOP** at `end_at`: `TaskStop` every in-flight agent (they have committed WIP). For each unfinished item: make sure its branch is pushed (if policy allows), leave the PR as draft, comment on the issue with where it stopped (one paragraph, from the agent's last report), keep Project Status = In Progress.
 - Kill the remaining watchdog/cooldown background tasks.
+- **Follow-ups:** from `state.nits`, file one issue "Tech debt from session <date>" (`type:task`, current milestone) listing each nit with issue/PR. From `state.interpretations`, file one `area:design` issue asking the game-designer to confirm the readings and record them on the wiki. Add both to the board and link them in the report.
 - Write the **session report** to `<state_dir>/reports/session-<date>.md`: start/end, items merged (#, PR), items in progress, QA-found issues created, blocked items with reason, usage used (5-hour Δ, weekly Δ), cost calibration table, recommendations for next session. Publish it to the wiki:
   1. Clone `wiki_git` into a temp dir and run `git config commit.gpgsign false` there (wiki commits are unsigned).
   2. Write the report as `Build-Session-<date>.md` (add `-2`, `-3` for a second session the same day). Write issue/PR refs as links (`[#n](https://github.com/<repo>/issues/n)`), because wiki pages don't auto-link `#n`.
@@ -129,6 +132,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
   "usage_baseline": {"five_hour": 9, "weekly": 2},
   "in_flight": [{"issue": 1, "role": "gameplay-developer", "agent": "<id/name>", "round": 1, "pr": null, "started_at": "ISO", "usage_at_start": 12}],
   "project_items": {"1": "PVTI_…"},
+  "nits": [{"issue": 1, "pr": 60, "text": "file.gd:23 per-tick Dictionary"}], "interpretations": [{"issue": 1, "pr": 60, "text": "…"}],
   "done": [{"issue": 1, "pr": 60, "minutes": 34, "cost_pct": 7}],
   "blocked": [{"issue": 3, "reason": "…"}],
   "created_issues": [61, 62],
@@ -136,6 +140,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
   "minutes": {"gameplay-developer": 31}
 }
 ```
+Write each agent's id into `in_flight` from the Agent tool result in the same step as the dispatch. Never use a placeholder id.
 
 ## 8. Guardrails
 - Respect `merge_policy`; never push to `base_branch` directly, never force-push, never merge a PR without QA PASS (and review APPROVE where required).
