@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git push https://github.com/gambarini/racing.wiki.git *)"
+      "Bash(git push https://github.com/gambarini/racing.wiki.git *)",
+      "Bash(gh pr review *)",
+      "Bash(gh pr comment *)",
+      "Bash(.claude/build/merge.sh *)",
+      "Bash(.claude/build/board.sh *)"
     ]
   }
 }

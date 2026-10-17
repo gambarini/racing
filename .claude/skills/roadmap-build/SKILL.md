@@ -40,18 +40,21 @@ Build it with one `gh` call returning only needed fields:
 Order:
 1. Open `qa:found` + `priority:high` issues (any milestone ≤ current) — bugs before features.
 2. Then by `milestone_order`, then `priority:high` first, then issue number ascending.
-Skip issues labelled `blocked`, `needs:split` (the split children are in the queue), issues already in flight, and milestone `Later (optional)`.
+Skip issues labelled `blocked`, `needs:split` (the split children are in the queue), `needs:human-check` (only a person can do them), issues already in flight, and milestone `Later (optional)`.
 
 **Board sync:** on each queue refresh, add open issues that are missing from the Project (agents should add the ones they create, but check): compare the issue numbers with `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[].content.number]'`, then `gh project item-add <number> --owner <owner> --url <issue url>` and cache the new item id in `project_items`. Also rebuild the item-id cache whenever an agent reports `NEW_ISSUES`, before you edit those items' Status: `gh project item-list <number> --owner <owner> --limit 300 --format json --jq '[.items[]|{key:(.content.number|tostring),value:.id}]|from_entries' > <state_dir>/project_items.json`. A stale cache makes `item-edit` fail with "field-id must be provided".
+
+Set Status with `.claude/build/board.sh <issue> <todo|in_progress|done>`. Run the helper scripts from `<main_checkout>` (`cd` there first if the shell's working directory drifted), so the relative path and its allow rule match. It reads the IDs from config, rebuilds a stale cache and adds a missing item to the board itself.
 
 **Role for an item:** first matching `role_by_label` entry by its `area:*` labels, else `default`. `area:design` items go to `game-designer` directly.
 
 **Parallelism:** two items may run at the same time only if their `area:*` labels are disjoint **and** neither depends on the other (an item depends on an earlier open item in the same milestone that its body or the wiki names, or that touches the same system). When unsure, run serially.
 
 ## 3. Per-item pipeline
-For each picked issue `#n` (set Project Status → In Progress with `gh project item-edit`, using IDs from config; find the item id once via `gh project item-list … --format json --jq` and cache it in state):
+For each picked issue `#n` (set Project Status → In Progress with `.claude/build/board.sh <n> in_progress`):
 
 1. **Design gate** — if the issue has no `Acceptance criteria` comment (check with `gh issue view n --json comments --jq '[.comments[].body|select(test("Acceptance criteria"))]|length'`): launch `game-designer`. If it returns `split`, drop `#n` and re-queue its children.
+   - **Batch gates:** check the next 3–5 queued items at once and give one designer call all of those that lack criteria (it costs about 1 % per batch). Also use a batch to fill an idle slot when no build can start (dependency, perf item running alone, serial mode).
 2. **Build** — launch the role's agent with `isolation: "worktree"`, `run_in_background: true`. If the issue also needs art (`NEEDS: art` from a dev, or the criteria mention a model), launch `technical-artist` for a sub-issue in parallel when pacing allows.
 3. **QA** — when the build agent returns a PR: launch `qa-tester` (`isolation: "worktree"`, background).
    - FAIL → relaunch the **same role** with the QA findings (max 2 fix rounds per item, then label `blocked`, comment why, move on).
@@ -60,7 +63,8 @@ For each picked issue `#n` (set Project Status → In Progress with `gh project 
    - **Wiki-only FAIL:** if QA fails only on a wiki criterion and the text is ready (staged, or in the PR body), launch `game-designer` to publish it right away, then rerun QA. Don't leave the PR waiting.
    - **Performance items:** don't run a benchmark-dependent build or QA in parallel with other worktree agents (machine load skews timings by 2–3×). Dispatch it alone, and judge a perf verdict only from interleaved before/after runs.
 4. **Review** — from milestone `separate_review_from_milestone` onwards, and only for PRs that change code: launch `tech-reviewer` after QA PASS. CHANGES with blocking findings → one fix round, then QA again.
-5. **Merge** (only if `merge_policy` allows): first `gh pr checks <pr>`: every check must be `pass`. QA PASS on a pending check isn't enough. If checks are pending, wait with a background `gh pr checks <pr> --watch --interval 20` and end your turn. If `main` moved in the same area since QA ran (another merge touched the same system), have the reviewer, or a quick QA rerun, verify the PR merged with `origin/main` before merging. Then `gh pr ready <pr>` if draft and complete, then `gh pr merge <pr> --squash --delete-branch`. Judge success by `gh pr view <pr> --json state --jq .state` == `MERGED`, not the exit code (deleting the local branch can fail while a worktree still holds it). Fetch/pull `base_branch` in the main checkout. Set Project Status → Done (the issue closes via `Closes #n`). Then run the worktree cleanup (§6) for this item's worktrees.
+5. **Merge** (only if `merge_policy` allows): if `main` moved in the same area since QA ran (another merge touched the same system), have the reviewer, or a quick QA rerun, verify the PR merged with `origin/main` first. Then run `.claude/build/merge.sh <pr> <issue> <agent ids of this item's worktree agents>`. It checks that every PR check is `pass` (exit 2 and touches nothing otherwise), marks the PR ready, squash-merges, verifies `MERGED`, pulls `base_branch`, sets the board to Done and removes the listed agents' worktrees and branches. On exit 2 with pending checks, wait with a background `gh pr checks <pr> --watch --interval 20`, end your turn and rerun it. The issue closes via `Closes #n`.
+   - **Human checks:** if QA reported a `HUMAN_CHECK:` line, file one issue after the merge: title `Human check: <what> (#n)`, labels `needs:human-check` + the item's `area:*`, same milestone, body with what to check and where, assigned to the repo owner. Add it to the board and record it in `state.human_checks`.
    - **Before any cleanup**, `TaskStop` every agent of this item whose task notification said "waiting on its own background work". Agents sometimes hand back their report but leave a background command running, and that keeps their worktree in use.
 6. Record the item outcome, duration and usage cost in state. Also record the reviewer's `NITS:` and the builder's `INTERPRETATIONS:` (if not `none`) under `state.nits` / `state.interpretations` with the issue and PR numbers.
 
@@ -87,7 +91,8 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 | now ≥ `end_at` | Hard stop (§5). |
 | 5-hour < `five_hour_normal_below_pct` | Up to `max_parallel_workers` concurrent agents. |
 | 5-hour between normal and `five_hour_serial_below_pct` | 1 agent at a time; prefer QA/merges of finished work over starting new items. |
-| 5-hour ≥ serial threshold | Dispatch nothing. If `resetsAt` < `wind_down_at`: cooldown — background `sleep` until `resetsAt` + 2 min, tell the user in one line, resume after. Otherwise wind down. |
+| 5-hour between serial threshold and `five_hour_finish_below_pct` | No builds, fix rounds or new items. Still dispatch cheap steps (QA, review, design-gate batch, merge) for items already in flight, one at a time, so a finished PR doesn't wait hours for a 1 % review. |
+| 5-hour ≥ serial threshold with nothing cheap left (or ≥ finish threshold) | Dispatch nothing. If `resetsAt` < `wind_down_at`: cooldown — background `sleep` until `resetsAt` + 2 min, tell the user in one line, resume after. If `resetsAt` is after `wind_down_at` but at least `late_reset_min_minutes` before `end_at`: cooldown until the reset, then only finish in-flight items (§5 *Late finish*). Otherwise wind down. |
 | Weekly ≥ `weekly_stop_at_pct` | Wind down. |
 | Plan usage `unavailable` / `not_applicable` | Run serially; rely on time only. |
 | Estimated cost of next agent + `reserve_pct` > remaining 5-hour % | Don't start it; pick a cheaper role step (QA/merge) or wait for in-flight work. |
@@ -95,14 +100,17 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 | Free disk < `min_free_disk_gb` | Clean up worktrees; if still low, no new worktree agents (designer-only work allowed). |
 | Remaining time < estimated duration of the item | Skip to a smaller item (a QA, a design gate, or a `type:task`) or start wind-down. |
 
+**Whole items:** a full item (build + QA + review) costs about `item_cost_pct` of the 5-hour window, so before starting a build check that the item can finish below the serial threshold; otherwise prefer a cheaper step.
+
 **Cost calibration:** record 5-hour `percentUsed` when each agent starts and when it returns; keep a running average per role in `state.cost_pct` and average minutes in `state.minutes` (seed from `default_cost_pct` / `default_task_minutes`). With parallel agents, split the observed delta evenly between them. Use these estimates in the rules above.
 
 ## 5. Wind-down and hard stop
-- **WIND_DOWN** (watchdog or rule): stop dispatching new items. Let in-flight build agents finish; run QA/merge only if it fits before `end_at`.
+- **WIND_DOWN** (watchdog or rule): stop dispatching new items. Let in-flight build agents finish; run QA/merge only if it fits before `end_at`. Use the wait to file the follow-up issues below, so the end is only report writing.
+- **Late finish** (little time left before `end_at`): run QA and review of the last PR in parallel instead of in sequence, with a hard time limit in both prompts. Merge only if both pass.
 - **HARD_STOP** at `end_at`: `TaskStop` every in-flight agent (they have committed WIP). For each unfinished item: make sure its branch is pushed (if policy allows), leave the PR as draft, comment on the issue with where it stopped (one paragraph, from the agent's last report), keep Project Status = In Progress.
 - Kill the remaining watchdog/cooldown background tasks.
 - **Follow-ups:** from `state.nits`, file one issue "Tech debt from session <date>" (`type:task`, current milestone) listing each nit with issue/PR. From `state.interpretations`, file one `area:design` issue asking the game-designer to confirm the readings and record them on the wiki. Add both to the board and link them in the report.
-- Write the **session report** to `<state_dir>/reports/session-<date>.md`: start/end, items merged (#, PR), items in progress, QA-found issues created, blocked items with reason, usage used (5-hour Δ, weekly Δ), cost calibration table, recommendations for next session. Publish it to the wiki:
+- Write the **session report** to `<state_dir>/reports/session-<date>.md`: start/end, items merged (#, PR), items in progress, QA-found issues created, blocked items with reason, open `needs:human-check` issues (`gh issue list --label needs:human-check`), usage used (5-hour Δ, weekly Δ), cost calibration table, recommendations for next session. Publish it to the wiki:
   1. Clone `wiki_git` into a temp dir and run `git config commit.gpgsign false` there (wiki commits are unsigned).
   2. Write the report as `Build-Session-<date>.md` (add `-2`, `-3` for a second session the same day). Write issue/PR refs as links (`[#n](https://github.com/<repo>/issues/n)`), because wiki pages don't auto-link `#n`.
   3. Add one row at the top of the table in `Build-Sessions.md`: date, duration, merged count, one-line highlights, `[[Build Session <date>]]`.
@@ -117,7 +125,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
   - above `orchestrator_context_lean_pct`: no more user-facing progress text except one line per merge; no optional reads.
   - above `orchestrator_context_critical_pct`: wind down early (finish in-flight, write the report) — the next run resumes from state.
 - **Watchdog wakes:** when a background `sleep` exits, run `date` and compare with `wind_down_at` / `end_at` before acting. If it exited early (killed, timed out), re-arm it for the remaining seconds instead of winding down.
-- **Worktree cleanup:** agent worktrees are not removed automatically once they hold commits. After an item merges (or is abandoned) run `git -C <main_checkout> worktree list --porcelain`, `git worktree remove --force <path>` for worktrees whose branch is `issue-<n>-*` of that item or detached at an already-merged commit, then `git worktree prune` and `git branch -D` the merged local branches. Never remove a worktree of an in-flight agent. Worktrees can stay **locked** with the reason `claude agent agent-<id> (pid …)`, where the pid is this orchestrator session, not the agent; once that agent id is no longer in `in_flight`, remove it with `git worktree remove -f -f <path>`.
+- **Worktree cleanup:** agent worktrees are not removed automatically once they hold commits. `merge.sh` cleans up the agents you pass it. For leftovers, or after an item is abandoned, run `git -C <main_checkout> worktree list --porcelain`, `git worktree remove --force <path>` for worktrees whose branch is `issue-<n>-*` of that item or detached at an already-merged commit, then `git worktree prune` and `git branch -D` the merged local branches. Never remove a worktree of an in-flight agent. Worktrees can stay **locked** with the reason `claude agent agent-<id> (pid …)`, where the pid is this orchestrator session, not the agent; once that agent id is no longer in `in_flight`, remove it with `git worktree remove -f -f <path>`.
 - Between events, end your turn: background agents and the watchdog wake you. Don't poll and don't sleep in the foreground.
 - An agent's report can arrive twice: as its hand-back message and again in the task notification, or repeated after a resume. Act on each report once. Check `state.json` (role/agent of that item) before dispatching the next step, so the same QA or merge isn't launched twice.
 - Progress lines to the user: one line per state change (dispatched / PR / QA verdict / merged / paused), nothing else.
@@ -135,16 +143,17 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
   "nits": [{"issue": 1, "pr": 60, "text": "file.gd:23 per-tick Dictionary"}], "interpretations": [{"issue": 1, "pr": 60, "text": "…"}],
   "done": [{"issue": 1, "pr": 60, "minutes": 34, "cost_pct": 7}],
   "blocked": [{"issue": 3, "reason": "…"}],
-  "created_issues": [61, 62],
+  "created_issues": [61, 62], "human_checks": [{"issue": 70, "for": 60}],
   "cost_pct": {"gameplay-developer": 6.5},
   "minutes": {"gameplay-developer": 31}
 }
 ```
-Write each agent's id into `in_flight` from the Agent tool result in the same step as the dispatch. Never use a placeholder id.
+Write each agent's id into `in_flight` from the Agent tool result, in the call right after the dispatch. Never write a placeholder id first and patch it later. Take `started_at` from `date`, not from an estimate.
 
 ## 8. Guardrails
 - Respect `merge_policy`; never push to `base_branch` directly, never force-push, never merge a PR without QA PASS (and review APPROVE where required).
 - Never close issues manually except duplicates and items whose deliverable has no PR (wiki-only or decision-only): close those only after verifying the deliverable exists (e.g. the wiki commit is on the remote) and comment the evidence. Otherwise merging with `Closes #n` closes them.
 - Don't start `start_session` sessions for workers; use the Agent tool (background, worktree isolation).
 - Don't change the roadmap's milestone order or dates; propose changes in the session report instead.
+- If an agent reports that a tool call was denied by the permission check, don't run that call for it. Note it in the report (and ask the user to add an allow rule) instead.
 - If an agent reports `blocked` for an environment reason (missing tool, auth), stop dispatching that role and report it to the user immediately in one line.

@@ -17,6 +17,7 @@ Same as other implementers: acceptance criteria required (else blocked / NEEDS: 
 - **Allocation-free ticks:** before opening the PR, check that `_physics_process`, `_process` and any per-tick `step()` allocate nothing: no new Dictionary/Array/String/Packed*Array per tick, no string keys or string scans, cached lookups and preallocated buffers. Reviewers block on this.
 - **Numbers in the PR body** (measurements, check output) must come from the final run on the pushed commit; update the body after your last change.
 - **Interpretations:** if a criterion is ambiguous and you pick a reading, list it under `## Interpretations` in the PR body and on an `INTERPRETATIONS:` line in your report, so the designer can confirm it.
+- **Design changes are not interpretations:** if meeting a criterion would mean overturning a decision recorded on the wiki or in the issue (a track's length or character, a race rule, a surface layout), stop and report `partial` + `NEEDS: design` with your measured numbers and the change you propose. Don't make the change and list it as an interpretation.
 
 ## Environment (every run)
 - Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.

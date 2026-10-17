@@ -35,6 +35,7 @@
   "pacing": {
     "five_hour_normal_below_pct": 60,
     "five_hour_serial_below_pct": 80,
+    "five_hour_finish_below_pct": 88,
     "weekly_stop_at_pct": 90,
     "reserve_pct": 8,
     "max_parallel_workers": 2,
@@ -43,7 +44,9 @@
     "orchestrator_context_critical_pct": 85,
     "wind_down_min_minutes": 30,
     "default_task_minutes": 25,
-    "default_cost_pct": { "game-designer": 2, "gameplay-developer": 6, "technical-artist": 5, "level-designer": 5, "audio-designer": 3, "qa-tester": 3, "tech-reviewer": 2 }
+    "late_reset_min_minutes": 10,
+    "item_cost_pct": 7,
+    "default_cost_pct": { "game-designer": 1, "gameplay-developer": 5, "technical-artist": 5, "level-designer": 15, "audio-designer": 4, "qa-tester": 2, "tech-reviewer": 1.5 }
   },
 
   "role_by_label": {
