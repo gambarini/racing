@@ -5,8 +5,14 @@
 ## inputs: [{t, throttle, brake, handbrake}] sorted by t (seconds). An entry applies from its t until
 ## the next entry; missing keys default to 0/false. Before the first entry all inputs are zero.
 ##
+## Optional "steer" key (-1..1, + = right). `initial_speed` (m/s) launches the car along its heading
+## with rolling wheels. `controller` is an optional Callable(tick: int, v: Vehicle, st: DriverInputState)
+## called every tick after the scripted inputs, for closed-loop drivers (e.g. speed hold).
+##
 ## forward_offset: see the var; used for Spawn_Slope, whose marker sits on the flat run-in (#108).
 ##
+## result also has fwd (Array of Vector3, unit forward) and steer_angle (PackedFloat64Array, rad, mean of
+## the two front wheels).
 ## result: {spawn, ticks, dt, t, pos (Array[Vector3]), speed, rpm, gear, omega (Array of 4-float
 ## PackedFloat64Array, rad/s), start_pos, end_pos, end_basis, end_speed, csv (path or "")}
 extends RefCounted
@@ -22,6 +28,8 @@ var ticks := 120
 ## Metres to move along the marker's forward (-Z) before spawning. Non-zero also snaps the car onto
 ## the ground there (ray cast) and aligns it with the surface normal, keeping its heading.
 var forward_offset := 0.0
+var initial_speed := 0.0 ## m/s along the heading at t = 0
+var controller := Callable()
 var csv_path := "" ## "" = no CSV; "user://x.csv" writes the telemetry buffer after the run
 
 
@@ -62,12 +70,16 @@ func run() -> Dictionary:
 		xf.origin = hit.position + up * (SPAWN_LIFT + 0.3)
 	v.transform = xf
 	world.add_child(v)
+	if initial_speed != 0.0:
+		v.linear_velocity = -v.global_transform.basis.z * initial_speed
+		for w in v.wheels:
+			w.omega = initial_speed / w.radius
 	var rec := TelemetryRecorder.new()
 	rec.vehicle = v
 	rec.capacity = maxi(ticks + 8, 64)
 	tree.root.add_child(rec)
 	var out := {"spawn": spawn, "ticks": ticks, "dt": DT, "t": PackedFloat64Array(),
-			"pos": [], "speed": PackedFloat64Array(), "rpm": PackedFloat64Array(),
+			"pos": [], "fwd": [], "steer_angle": PackedFloat64Array(), "speed": PackedFloat64Array(), "rpm": PackedFloat64Array(),
 			"gear": PackedInt32Array(), "omega": [], "start_pos": v.global_position, "csv": ""}
 	var st := DriverInputState.new()
 	for i in ticks:
@@ -75,10 +87,15 @@ func run() -> Dictionary:
 		st.throttle = float(inp.get("throttle", 0.0))
 		st.brake = float(inp.get("brake", 0.0))
 		st.handbrake = bool(inp.get("handbrake", false))
+		st.steer = float(inp.get("steer", 0.0))
+		if controller.is_valid():
+			controller.call(i, v, st)
 		v.apply_input(st)
 		await tree.physics_frame
 		out.t.append(float(i + 1) * DT)
 		out.pos.append(v.global_position)
+		out.fwd.append(-v.global_transform.basis.z)
+		out.steer_angle.append(0.5 * (v.wheels[0].steer_angle + v.wheels[1].steer_angle))
 		out.speed.append(v.linear_velocity.length())
 		out.rpm.append(v.rpm())
 		out.gear.append(v.gear())
