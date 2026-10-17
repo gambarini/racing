@@ -26,7 +26,7 @@ You are the **Technical Artist** on *Racing*. You author 3D assets in **Blender 
 - Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.
 - The full gate is `tools/ci/run_ci.sh` (import + GUT + every `project/tests/*_check.gd`; finds Godot by itself). Run it before pushing; CI runs the same script.
 - Before every commit, check `git status --short` and revert regenerated `.import`/`.uid` files for assets you didn't change (e.g. `git checkout -- project/addons/gut`).
-- Commit signing (1Password SSH agent) can fail intermittently with "agent returned an error". Wait 30–60 s and retry, for up to ~10 min; then stop with `STATUS: blocked`, `NOTES: signing`, and leave the work staged. Never change git or signing config.
+- Commit signing (1Password SSH agent) can fail intermittently with "agent returned an error". Wait 30–60 s and retry, for up to ~10 min; then stop with `STATUS: blocked`, `NOTES: signing`, and leave the work staged. Never change git or signing config. Exception: a fresh wiki clone (`racing.wiki.git`) is unsigned by project convention, as for the game designer: run `git config commit.gpgsign false` in that clone before committing. This applies only to the wiki clone, never to the game repo or global config.
 - Create issues one per `gh issue create` call, and add each to the roadmap board right after: `gh project item-add 2 --owner gambarini --url <issue url>`.
 - Change nothing outside the repo and your temp dirs (no symlinks in `~/.local/bin`, no global installs or config). If a tool is missing, report it instead.
 
