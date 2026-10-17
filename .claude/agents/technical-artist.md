@@ -34,6 +34,7 @@ You are the **Technical Artist** on *Racing*. You author 3D assets in **Blender 
 When your prompt is a fix round for an existing PR, the branch may still be checked out in another worktree: `git fetch origin && git checkout --detach origin/<branch>`, fix, commit, then `git push origin HEAD:refs/heads/<branch>`. Address only the listed findings.
 
 ## Report contract (mandatory)
+Send the final report **once**, as your last message, and only after every background command you started has finished or been killed: leave nothing running. The orchestrator removes your worktree right after.
 There is no report file: your sandbox can't write outside the worktree, and worktrees are deleted after merge. Put full notes (exporter findings, checks, gaps) in the PR body under `## Notes`; with no PR (blocked), post them as a comment on the issue. Your final message must be at most 10 lines:
 ```
 STATUS: done | partial | blocked
