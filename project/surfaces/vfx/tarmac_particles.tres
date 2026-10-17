@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SurfaceParticleEffect" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://surfaces/vfx/surface_particle_effect.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+kind = &"smoke"
+max_amount = 30
+lifetime = 0.8
+roll_rate = 0.0
+color = Color(0.85, 0.85, 0.85, 0.35)
+size = 0.35
+launch_speed = 0.8
+upward_bias = 0.2
+gravity = 0.5

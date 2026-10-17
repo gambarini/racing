@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SurfaceParticleEffect" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://surfaces/vfx/surface_particle_effect.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+kind = &"roost"
+max_amount = 50
+lifetime = 0.9
+roll_rate = 0.15
+color = Color(0.55, 0.52, 0.48, 0.9)
+size = 0.06
+launch_speed = 4.0
+upward_bias = 0.6
+gravity = -9.0

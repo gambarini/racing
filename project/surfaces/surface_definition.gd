@@ -9,6 +9,8 @@ extends Resource
 @export var peak_slip_scale := 1.0 ## kappa_peak and alpha_peak multiplier
 @export var rolling_resistance := 0.012 ## Crr, F = Crr * Fz (N)
 @export var deformation_drag := 0.0 ## k, F = k * Fz * v^2 (v in m/s)
+@export var particle_effect: SurfaceParticleEffect ## #20, non-null for every v1 surface
+@export var tyre_mark: TyreMarkStyle ## #20, non-null for every v1 surface
 
 
 ## True when applying this surface leaves a tire unchanged.
