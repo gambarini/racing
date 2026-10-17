@@ -151,18 +151,21 @@ func _initialize() -> void:
 	check(rg >= 1.2 and rg <= 1.8, "gravel stop distance ratio %.2f in 1.2..1.8 (issue: 1.3..1.8)" % rg)
 	check(rm >= 1.5 and rm <= 2.6, "mud stop distance ratio %.2f in 1.5..2.6 (issue: 1.8..2.6)" % rm)
 	check(rg < rm, "mud stops longer than gravel")
-	# Issue #102 asks for deep_mud > mud > grass > tarmac_wet > tarmac. With the wiki table values
-	# a locked-wheel stop cannot give that: grass (slide mu 0.5, Crr 0.03) stops longest, and
-	# deep_mud's Crr 0.14 + k 0.0005 cancels its lower slide mu (0.375) so it stops ~ like mud.
-	# We gate on the orderings that do hold and print the rest; see PR notes (needs design).
+	# Issue #102 (design ruling): locked-wheel stop ordering, no order among the soft three.
 	var line := ""
 	for id in IDS:
-		line += "%s %.1f m (x%.2f); " % [id, stop[id], stop[id] / stop[&"tarmac"]]
+		line += "%s %.1f m (x%.2f), coast %.2f s; " % [id, stop[id], stop[id] / stop[&"tarmac"], coast[id]]
 	print("BRAKE ALL: ", line)
 	check(stop[&"tarmac"] < stop[&"dirt"] and stop[&"dirt"] < stop[&"tarmac_wet"], "tarmac < dirt < tarmac_wet stop distance")
 	for id in [&"grass", &"mud", &"deep_mud"]:
 		check(stop[id] > stop[&"tarmac_wet"], "%s stop distance > tarmac_wet" % id)
-	print("NOTE ordering deep_mud > mud > grass: ", stop[&"deep_mud"] > stop[&"mud"] and stop[&"mud"] > stop[&"grass"], " (issue #102 expectation)")
+	var rw: float = stop[&"tarmac_wet"] / stop[&"tarmac"]
+	var rd: float = stop[&"dirt"] / stop[&"tarmac"]
+	check(rw >= 1.2 and rw <= 1.6, "tarmac_wet stop ratio %.2f in 1.2..1.6" % rw)
+	check(rd >= 1.1 and rd <= 1.4, "dirt stop ratio %.2f in 1.1..1.4" % rd)
+	var corder := [&"deep_mud", &"mud", &"grass", &"dirt", &"tarmac_wet", &"tarmac"]
+	for i in range(1, corder.size()):
+		check(coast[corder[i - 1]] < coast[corder[i]], "coast-down 20->15 m/s: %s (%.2f s) < %s (%.2f s)" % [corder[i - 1], coast[corder[i - 1]], corder[i], coast[corder[i]]])
 
 	print("RESULT: ", "FAIL (%d)" % failures if failures > 0 else "OK")
 	quit(1 if failures > 0 else 0)
