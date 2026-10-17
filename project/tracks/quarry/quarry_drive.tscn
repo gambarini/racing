@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://tracks/quarry/quarry_drive.gd" id="1_qd"]
 [ext_resource type="PackedScene" path="res://tracks/quarry/quarry.tscn" id="2_q"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://debug/telemetry_overlay.gd" id="7_ov"]
 [ext_resource type="PackedScene" path="res://camera/chase_camera.tscn" id="8_cam"]
 [ext_resource type="Script" path="res://audio/vehicle_audio.gd" id="9_aud"]
+[ext_resource type="Script" path="res://vfx/vehicle_vfx.gd" id="10_vfx"]
 
 [node name="QuarryDrive" type="Node3D"]
 script = ExtResource("1_qd")
@@ -24,6 +25,9 @@ script = ExtResource("4_vis")
 [node name="VehicleAudio" type="Node" parent="Vehicle"]
 script = ExtResource("9_aud")
 is_player = true
+
+[node name="VehicleVfx" type="Node3D" parent="Vehicle"]
+script = ExtResource("10_vfx")
 
 [node name="DriverInput" type="Node" parent="."]
 script = ExtResource("5_di")
