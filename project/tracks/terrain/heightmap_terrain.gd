@@ -14,14 +14,32 @@ var origin := Vector2.ZERO ## world XZ of sample (0,0)
 var heights := PackedFloat32Array() ## row-major, index = iz * n + ix
 var surface_map: SurfaceMap
 var body: StaticBody3D
+var _scratch := PackedFloat32Array() ## reusable weights buffer for dominant_surface_at
 
 
 ## Build from an FORMAT_RF image (one pixel per sample, value = height in m).
-func load_from_image(img: Image, world_origin: Vector2) -> void:
-	assert(img.get_width() == img.get_height() and img.get_format() == Image.FORMAT_RF)
-	n = img.get_width()
+## Silent size check used by `load_from_image`: OK, or ERR_INVALID_PARAMETER unless the image is
+## square FORMAT_RF with n >= 2 and (n - 1) % mesh_step == 0 so visual chunks tile exactly.
+func validate_image(img: Image) -> Error:
+	var sz := img.get_width()
+	if sz != img.get_height() or img.get_format() != Image.FORMAT_RF:
+		return ERR_INVALID_PARAMETER
+	if sz < 2 or mesh_step < 1 or (sz - 1) % mesh_step != 0:
+		return ERR_INVALID_PARAMETER
+	return OK
+
+
+## Returns OK, or ERR_INVALID_PARAMETER (with push_error, terrain left unchanged) when
+## `validate_image` rejects the image.
+func load_from_image(img: Image, world_origin: Vector2) -> Error:
+	if validate_image(img) != OK:
+		push_error("HeightmapTerrain: invalid heightmap %dx%d (need square FORMAT_RF, n >= 2, (n - 1) %% mesh_step (%d) == 0)" % [img.get_width(), img.get_height(), mesh_step])
+		return ERR_INVALID_PARAMETER
+	var sz := img.get_width()
+	n = sz
 	origin = world_origin
 	heights = img.get_data().to_float32_array()
+	return OK
 
 
 func extent() -> float:
@@ -45,16 +63,26 @@ func surface_at(x: float, z: float) -> Dictionary:
 	return surface_map.sample(x, z) if surface_map else {}
 
 
-## Id of the heaviest surface at world (x, z), or &"" if none.
+## Allocation-free surface weights at world (x, z): `out[k]` = weight of `surface_map.ids[k]`
+## (see SurfaceMap.sample_into). Returns false (and zeroes out) without a map or outside it.
+## Intended for the per-tick wheel queries: 4 wheels x 60 Hz with one caller-owned buffer (#103).
+func surface_weights_into(x: float, z: float, out: PackedFloat32Array) -> bool:
+	if surface_map == null:
+		return false
+	return surface_map.sample_into(x, z, out)
+
+
+## Id of the heaviest surface at world (x, z), or &"" if none. Allocation-free after first call.
 func dominant_surface_at(x: float, z: float) -> StringName:
-	var best := &""
+	if surface_map == null or not surface_weights_into(x, z, _scratch):
+		return &""
+	var best := -1
 	var bw := 0.0
-	var w := surface_at(x, z)
-	for id in w:
-		if w[id] > bw:
-			bw = w[id]
-			best = id
-	return best
+	for k in surface_map.ids.size():
+		if _scratch[k] > bw:
+			bw = _scratch[k]
+			best = k
+	return surface_map.ids[best] if best >= 0 else &""
 
 
 func build_collider() -> void:

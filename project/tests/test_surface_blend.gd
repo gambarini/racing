@@ -111,3 +111,102 @@ func test_telemetry_weight_columns_match_registry() -> void:
 	assert_eq(TelemetrySchema.SURFACE_W_COL, TelemetrySchema.POWERTRAIN_COL + TelemetrySchema.N_POWERTRAIN)
 	var names := TelemetrySchema.column_names()
 	assert_eq(names[TelemetrySchema.weight_col(1, 1)], "fr_w_gravel")
+
+
+# --- sample_into equivalence (#133) ---
+
+func _check_equivalent(m: SurfaceMap, label: String) -> void:
+	var out := PackedFloat32Array()
+	var hi := m.origin + m.size
+	var lo := m.origin - m.size * 0.1
+	var span := m.size * 1.2
+	var worst := 0.0
+	var verdict_mismatch := 0
+	var empties := 0
+	for j in 64:
+		for i in 64:
+			var x := lo.x + span.x * i / 63.0
+			var z := lo.y + span.y * j / 63.0
+			# Force exact edges/corners of the map into the grid.
+			if i == 8:
+				x = m.origin.x
+			elif i == 55:
+				x = hi.x
+			if j == 8:
+				z = m.origin.y
+			elif j == 55:
+				z = hi.y
+			var d := m.sample(x, z)
+			var ok := m.sample_into(x, z, out)
+			if ok != (not d.is_empty()):
+				verdict_mismatch += 1
+			if d.is_empty():
+				empties += 1
+				for k in m.ids.size():
+					worst = maxf(worst, absf(out[k]))
+			else:
+				for k in m.ids.size():
+					worst = maxf(worst, absf(out[k] - d.get(m.ids[k], 0.0)))
+	assert_eq(verdict_mismatch, 0, label + ": empty/non-empty verdict")
+	assert_lt(worst, 1e-5, label + ": max weight difference")
+	assert_gt(empties, 0, label + ": grid includes outside points")
+
+
+func test_sample_into_matches_sample_synthetic_maps() -> void:
+	_check_equivalent(_map(2, 2, 1.0, func(c, _r): return Color(1, 0, 0, 0) if c == 0 else Color(0, 1, 0, 0)), "two-texel")
+	_check_equivalent(_map(8, 5, 1.5, func(c, r): return Color(c / 8.0, r / 5.0, 0.2, 0.1)), "gradient")
+	_check_equivalent(_map(4, 4, 1.0, func(_c, _r): return Color(0.3, 0.3, 0.0, 0.0)), "unnormalised")
+	_check_equivalent(_map(3, 3, 2.0, func(c, r): return Color(0, 0, 0, 0) if (c + r) % 2 == 0 else Color(0.5, 0.5, 0, 0)), "zero-coverage holes")
+	var m := _map(6, 6, 1.0, func(c, r): return Color(c / 6.0, 0.1, r / 6.0, 0.0))
+	var img2 := Image.create(6, 6, false, Image.FORMAT_RGBA8)
+	for r in 6:
+		for c in 6:
+			img2.set_pixel(c, r, Color(0.0 if c < 3 else 1.0, 0.5, 0.0, 0.25))
+	m.images.append(img2)
+	m.ids = [&"a", &"b", &"c", &"d", &"e", &"f", &"g", &"h"]
+	_check_equivalent(m, "two-image")
+
+
+func test_sample_into_matches_sample_quarry() -> void:
+	var q := Quarry.new()
+	q.build()
+	_check_equivalent(q.terrain.surface_map, "quarry")
+	q.free()
+
+
+func test_sample_into_resizes_and_zeroes() -> void:
+	var m := _map(2, 2, 1.0, func(_c, _r): return Color(1, 0, 0, 0))
+	var out := PackedFloat32Array()
+	assert_true(m.sample_into(1.0, 1.0, out))
+	assert_eq(out.size(), 4)
+	assert_almost_eq(out[0], 1.0, 1e-6)
+	assert_false(m.sample_into(-5.0, 1.0, out))
+	assert_eq(out[0], 0.0)
+
+
+func test_dominant_surface_at_matches_sample() -> void:
+	var t := HeightmapTerrain.new()
+	t.surface_map = _map(2, 2, 1.0, func(c, _r): return Color(1, 0, 0, 0) if c == 0 else Color(0, 1, 0, 0))
+	assert_eq(t.dominant_surface_at(0.5, 0.5), &"tarmac")
+	assert_eq(t.dominant_surface_at(1.5, 0.5), &"gravel")
+	assert_eq(t.dominant_surface_at(9.0, 0.5), &"")
+	t.free()
+
+
+func test_load_from_image_validates_size() -> void:
+	var t := HeightmapTerrain.new()
+	t.mesh_step = 2
+	assert_eq(t.load_from_image(Image.create(5, 5, false, Image.FORMAT_RF), Vector2.ZERO), OK)
+	assert_eq(t.n, 5)
+	# validate_image is the silent twin of load_from_image's check (load_from_image also push_errors,
+	# which the CI log scan would flag).
+	assert_eq(t.validate_image(Image.create(6, 6, false, Image.FORMAT_RF)), ERR_INVALID_PARAMETER)
+	assert_eq(t.validate_image(Image.create(1, 1, false, Image.FORMAT_RF)), ERR_INVALID_PARAMETER)
+	assert_eq(t.validate_image(Image.create(5, 4, false, Image.FORMAT_RF)), ERR_INVALID_PARAMETER)
+	assert_eq(t.validate_image(Image.create(5, 5, false, Image.FORMAT_RGBA8)), ERR_INVALID_PARAMETER)
+	assert_eq(t.validate_image(Image.create(5, 5, false, Image.FORMAT_RF)), OK)
+	t.free()
+	var q := Quarry.new()
+	q.build()
+	assert_eq(q.terrain.n, Quarry.N)
+	q.free()
