@@ -50,6 +50,25 @@ func gear() -> int:
 	return gearbox.gear
 
 
+## Start from a rolling driveline (scenario harness, #168): pick the forward gear the auto box
+## would hold at this driveline speed (upshift while the closed-throttle upshift rpm is reached),
+## lock the clutch and put the engine on the driveline speed. `w_mean` = mean driven wheel speed
+## (rad/s, > 0). Call before the first step; not for per-tick use.
+func sync_to_wheel_speed(w_mean: float) -> void:
+	var g := 1
+	var n := def.gear_count()
+	while g < n and def.total_ratio(g) * w_mean / RPM_TO_RAD >= gearbox.upshift_rpm(0.0):
+		g += 1
+	gearbox.gear = g
+	gearbox.since_shift = 1e9
+	gearbox.cut_left = 0.0
+	var w_drive := def.total_ratio(g) * w_mean
+	rpm_driveline = w_drive / RPM_TO_RAD
+	_prev_w_drive = w_drive
+	engine.omega = maxf(w_drive, def.idle_rpm * RPM_TO_RAD)
+	locked = w_drive >= def.idle_rpm * RPM_TO_RAD
+
+
 ## Slip between engine and driveline in rpm (+ = engine faster).
 func clutch_slip_rpm() -> float:
 	return engine.rpm() - rpm_driveline

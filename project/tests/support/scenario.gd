@@ -6,7 +6,8 @@
 ## the next entry; missing keys default to 0/false. Before the first entry all inputs are zero.
 ##
 ## Optional "steer" key (-1..1, + = right). `initial_speed` (m/s) launches the car along its heading
-## with rolling wheels. `controller` is an optional Callable(tick: int, v: Vehicle, st: DriverInputState)
+## with rolling wheels, on its springs at ride height (ground ray cast), powertrain synced to the
+## wheel speed (auto-box gear, locked clutch). `controller` is an optional Callable(tick: int, v: Vehicle, st: DriverInputState)
 ## called every tick after the scripted inputs, for closed-loop drivers (e.g. speed hold).
 ##
 ## forward_offset: see the var; used for Spawn_Slope.
@@ -19,6 +20,7 @@ extends RefCounted
 
 const PROVING_GROUND := "res://tracks/proving_ground/proving_ground.tscn"
 const DT := 1.0 / 120.0
+const RIDE_LIFT := 0.0 ## launch entry: body origin at design ride height above the ground (#168)
 const SPAWN_LIFT := 0.1 ## metres above the marker so the car drops onto its springs
 
 var tree: SceneTree
@@ -65,7 +67,8 @@ func run() -> Dictionary:
 	var v: Vehicle = load("res://vehicle/vehicle.gd").new()
 	var xf := marker.global_transform
 	xf.origin += Vector3(0, SPAWN_LIFT, 0)
-	if forward_offset != 0.0:
+	# A launch (initial_speed) always snaps to the ground and starts on the springs (#168).
+	if forward_offset != 0.0 or initial_speed != 0.0:
 		await tree.physics_frame # let the static colliders register before ray casting
 		var from := xf.origin - xf.basis.z * forward_offset + Vector3(0, 20, 0)
 		var q := PhysicsRayQueryParameters3D.create(from, from - Vector3(0, 40, 0))
@@ -74,7 +77,7 @@ func run() -> Dictionary:
 		var up: Vector3 = hit.normal
 		var fwd := (-xf.basis.z).slide(up).normalized()
 		xf.basis = Basis(fwd.cross(up), up, -fwd)
-		xf.origin = hit.position + up * (SPAWN_LIFT + 0.3)
+		xf.origin = hit.position + up * (RIDE_LIFT if initial_speed != 0.0 else SPAWN_LIFT + 0.3)
 	v.transform = xf
 	if car != null:
 		v.definition = car
@@ -83,6 +86,8 @@ func run() -> Dictionary:
 		v.linear_velocity = -v.global_transform.basis.z * initial_speed
 		for w in v.wheels:
 			w.omega = initial_speed / w.radius
+		if initial_speed > 0.0 and v.powertrain != null:
+			v.powertrain.sync_to_wheel_speed(initial_speed / v.wheels[0].radius)
 	var rec := TelemetryRecorder.new()
 	rec.vehicle = v
 	rec.capacity = maxi(ticks + 8, 64)
