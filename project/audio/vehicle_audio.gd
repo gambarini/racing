@@ -1,7 +1,8 @@
 ## Per-surface tire audio and gamepad rumble for the player's vehicle (#21). Add as a child of a
 ## Vehicle (or call bind_vehicle); it only reads Wheel state, vehicle.gd is untouched.
-## Wiring into the car scene is tracked in #130. The spawner must set `is_player` on the player's
-## car only: other instances (AI, ghosts) create no players and never touch the gamepad.
+## Wired into the car-in-track scene (#130): tracks/quarry/quarry_drive.tscn has it as a child of
+## Vehicle with is_player = true. A spawner of AI cars / ghosts sets `is_player = false` on the
+## instance before adding it to the tree: such instances create no players and never touch the gamepad.
 ## Loops are created lazily, one rolling + one slip player per surface actually seen under a wheel;
 ## their gains are the wheel-averaged surface weights (#19) times the wheel's speed/slip level,
 ## slewed so crossfades never click. step() allocates nothing.
