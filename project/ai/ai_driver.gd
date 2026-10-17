@@ -27,7 +27,10 @@ var i_limit := 0.5
 var brake_kp := 0.35 ## brake per m/s of overspeed
 var brake_deadband := 0.3 ## m/s of overspeed tolerated before braking
 var lead_time := 0.25 ## s of speed look-ahead on the target profile
-var speed_scale := 1.0 ## multiplies the line's target speed (#30 skill hook; not a physics multiplier)
+## Fraction of the line's target speed driven (#30 skill hook; a command-side limit, not a physics
+## multiplier). 0.9 because the solver has no friction-circle budget yet (#154): at 1.0 the car runs
+## wide / off road in the Quarry's long corners.
+var speed_scale := 0.9
 ## Slip-aware throttle cut and counter-steer.
 var slip_target_deg := 8.0 ## (estimate, #28)
 var slip_span_deg := 6.0 ## throttle reaches 0 this far above the target
@@ -115,9 +118,8 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	var over := absf(slip_deg) - slip_target_deg
 	slip_active = over > 0.0
 	if slip_active:
-		var counter := signf(slip_deg) * clampf(deg_to_rad(absf(slip_deg)) / max_steer_rad * counter_gain, 0.0, 1.0)
-		if counter * want <= 0.0 or absf(counter) > absf(want):
-			want = counter
+		# steer toward the slide by the slip beyond the target, on top of the pursuit command
+		want = clampf(want + signf(slip_deg) * deg_to_rad(over) / max_steer_rad * counter_gain, -1.0, 1.0)
 	_steer = SteeringFilter.step_steer(_steer, want, dt, speed * 3.6)
 	st.steer = _steer
 	# --- Speed: PI on the profile a little ahead ---

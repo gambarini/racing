@@ -52,9 +52,6 @@ func _lap_run(csv := "") -> Dictionary:
 	var ai := AiDriver.new()
 	ai.setup(line, MAX_TICKS if csv != "" else 0)
 	ai.telemetry_enabled = csv != ""
-	for k in OS.get_environment("AI_TUNE").split(",", false):
-		var kv := k.split("=")
-		ai.set(kv[0], float(kv[1]))
 	drive.ai_driver = ai
 	var wrong := WrongWayDetector.new()
 	var wrong_ticks := 0
