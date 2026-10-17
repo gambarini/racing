@@ -128,3 +128,36 @@ func test_joker_flags_only_the_lap_that_takes_it() -> void:
 	assert_false(timer.laps[0]["joker"])
 	assert_true(timer.laps[1]["joker"])
 	assert_false(timer.laps[2]["joker"])
+
+
+func test_standing_start_lap1_timed_from_signal() -> void:
+	var timer := track.make_lap_timer(DT)
+	timer.start_standing()  # signal at t=0, car idle behind the line
+	var step_angle := SPEED * DT / R
+	var a := -0.05
+	var crossed_tick := 0
+	for i in int(3.0 / DT):
+		timer.step(_point(a))
+	while a < TAU + 0.05:
+		a += step_angle
+		timer.step(_point(a))
+		if crossed_tick == 0 and a > 0.0:
+			crossed_tick = timer.tick
+	assert_eq(timer.laps.size(), 1, "one lap closed")
+	assert_eq(timer.out_of_order_crossings, 0, "grid-to-line crossing is not out of order")
+	var first: int = timer.laps[0]["ticks"]
+	assert_gt(first, int(3.0 / DT) + int(14.0 / DT), "lap 1 includes the 3 s before the line")
+	assert_lt(first, int((3.0 + 17.0) / DT))
+	assert_eq(timer.laps[0]["sector_ticks"].size(), 3)
+
+
+func test_standing_start_lap2_is_gate_to_gate() -> void:
+	var timer := track.make_lap_timer(DT)
+	timer.start_standing()
+	_drive(timer, 3)
+	assert_eq(timer.laps.size(), 3)
+	assert_gt(timer.laps[0]["ticks"], timer.laps[1]["ticks"], "lap 1 includes grid time")
+	var flying := track.make_lap_timer(DT)
+	_drive(flying, 3)
+	assert_eq(timer.laps[1]["ticks"], flying.laps[1]["ticks"], "lap 2 = gate-0 to gate-0")
+	assert_eq(timer.laps[2]["ticks"], flying.laps[2]["ticks"])
