@@ -21,7 +21,10 @@ const N_POWERTRAIN := 4
 const N_SURF := 7 ## == SurfaceRegistry.ids().size() (asserted in tests)
 ## Per-wheel drive torque in Nm (#26), appended last: fl_drive_tq .. rr_drive_tq.
 const DRIVE_TQ_COL := N_CHASSIS + 4 * N_WHEEL_CH + N_POWERTRAIN + 4 * N_SURF
-const N_COLS := DRIVE_TQ_COL + 4
+## Vertical acceleration in g (#104), appended after the drive torques: world-vertical d(vy)/dt / g,
+## so 0 at rest or cruising, +g bump/compression, -g crest, -1 in free fall.
+const VERT_G_COL := DRIVE_TQ_COL + 4
+const N_COLS := VERT_G_COL + 1
 const POWERTRAIN_COL := N_CHASSIS + 4 * N_WHEEL_CH
 const SURFACE_CH := 7
 
@@ -37,6 +40,7 @@ static func column_names() -> PackedStringArray:
 			out.append("%s_w_%s" % [w, id])
 	for w in WHEELS:
 		out.append(w + "_drive_tq")
+	out.append("vert_g")
 	return out
 
 
