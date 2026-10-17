@@ -13,6 +13,14 @@ const EPS := 1e-6
 @export var ids: Array[StringName] = [] ## channel -> surface id (image 0: R,G,B,A, image 1: ...)
 @export var images: Array[Image] = [] ## RGBA8 splat images (all the same size)
 
+# Cached weights, texel-major: _wt[(iz * _cw + ix) * _stride + k] = weight of ids[k] in [0, 1].
+# Built once on first `sample_into` (see `rebuild_cache`).
+var _wt := PackedFloat32Array()
+var _cw := 0 ## cached image width
+var _ch := 0 ## cached image height
+var _stride := 0 ## cached channels per texel = min(ids.size(), 4 * images.size())
+var _cache_key := -1 ## images.size() * 64 + ids.size() the cache was built for
+
 
 ## True when world (x, z) lies inside the map rectangle.
 func contains(x: float, z: float) -> bool:
@@ -57,3 +65,90 @@ func sample(x: float, z: float) -> Dictionary:
 	for k in out:
 		out[k] = out[k] / total
 	return out
+
+
+## Rebuilds the weight cache used by `sample_into`. Called automatically the first time (and when
+## `images` or `ids` change size); call it yourself after editing pixels or swapping an image.
+func rebuild_cache() -> void:
+	_wt.clear()
+	_cw = 0
+	_ch = 0
+	_stride = mini(ids.size(), 4 * images.size())
+	_cache_key = images.size() * 64 + ids.size()
+	if images.is_empty():
+		return
+	_cw = images[0].get_width()
+	_ch = images[0].get_height()
+	_wt.resize(_cw * _ch * _stride)
+	for im in images.size():
+		var c := images[im]
+		if c.get_format() != Image.FORMAT_RGBA8:
+			c = c.duplicate()
+			c.convert(Image.FORMAT_RGBA8)
+		var bytes := c.get_data()
+		var n := mini(_cw * _ch, bytes.size() / 4)
+		for t in n:
+			for ch in 4:
+				var k := im * 4 + ch
+				if k < _stride:
+					_wt[t * _stride + k] = bytes[t * 4 + ch] / 255.0
+
+
+## Allocation-free twin of `sample()` for per-tick queries (4 wheels x 60 Hz, #103).
+## Writes the normalised weight of `ids[k]` into `out[k]` for every k (same bilinear + renormalise
+## maths as `sample()`), resizing `out` only when it is smaller than `ids`; entries beyond
+## ids.size() are left untouched. Returns false and zeroes `out[0..ids.size())` outside the map
+## or at zero coverage (where `sample()` returns {}). Reads a cached float copy of the images:
+## no Dictionary, no get_pixel. Duplicate ids get one slot each (sample() would sum them).
+## Call `rebuild_cache()` after modifying the images' pixels.
+func sample_into(x: float, z: float, out: PackedFloat32Array) -> bool:
+	var nids := ids.size()
+	if out.size() < nids:
+		out.resize(nids)
+	var rx := x - origin.x
+	var rz := z - origin.y
+	if rx < 0.0 or rz < 0.0 or rx > size.x or rz > size.y or images.is_empty():
+		for k in nids:
+			out[k] = 0.0
+		return false
+	if _cache_key != images.size() * 64 + nids:
+		rebuild_cache()
+	var w0 := _cw
+	var h0 := _ch
+	var fx := clampf(rx / size.x * w0 - 0.5, 0.0, float(w0 - 1))
+	var fz := clampf(rz / size.y * h0 - 0.5, 0.0, float(h0 - 1))
+	var ix := int(fx)
+	var iz := int(fz)
+	if ix > w0 - 2:
+		ix = maxi(w0 - 2, 0)
+	if iz > h0 - 2:
+		iz = maxi(h0 - 2, 0)
+	var tx := fx - ix
+	var tz := fz - iz
+	var ix1 := ix + 1 if ix + 1 < w0 else w0 - 1
+	var iz1 := iz + 1 if iz + 1 < h0 else h0 - 1
+	var st := _stride
+	var o00 := (iz * w0 + ix) * st
+	var o10 := (iz * w0 + ix1) * st
+	var o01 := (iz1 * w0 + ix) * st
+	var o11 := (iz1 * w0 + ix1) * st
+	var w00 := (1.0 - tx) * (1.0 - tz)
+	var w10 := tx * (1.0 - tz)
+	var w01 := (1.0 - tx) * tz
+	var w11 := tx * tz
+	var total := 0.0
+	for k in st:
+		var w := _wt[o00 + k] * w00 + _wt[o10 + k] * w10 + _wt[o01 + k] * w01 + _wt[o11 + k] * w11
+		if w > EPS:
+			out[k] = w
+			total += w
+		else:
+			out[k] = 0.0
+	for k in range(st, nids):
+		out[k] = 0.0
+	if total <= EPS:
+		return false
+	var inv := 1.0 / total
+	for k in st:
+		out[k] *= inv
+	return true
