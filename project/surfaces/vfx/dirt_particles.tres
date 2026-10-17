@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SurfaceParticleEffect" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://surfaces/vfx/surface_particle_effect.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+kind = &"dust"
+max_amount = 75
+lifetime = 1.6
+roll_rate = 0.3
+color = Color(0.62, 0.5, 0.35, 0.45)
+size = 0.5
+launch_speed = 1.5
+upward_bias = 0.3
+gravity = 0.3
