@@ -2,9 +2,11 @@ class_name LapTimer
 extends RefCounted
 ## Ordered-gate lap and sector timing with physics-tick resolution (issue #105).
 ## Pure logic: feed it the car position once per physics tick via `step()`.
-## Gate 0 is start/finish. A lap starts at the first crossing of gate 0 and completes when
-## gate 0 is crossed again after every gate 1..n-1 was crossed in order. Out-of-order
-## crossings are ignored. `sector_end_gates` lists the gate indices ending sector 1 and 2;
+## Gate 0 is start/finish. In flying-lap mode (default) a lap starts at the first crossing of
+## gate 0 and completes when gate 0 is crossed again after every gate 1..n-1 was crossed in
+## order. In standing-start mode (`start_standing()`, #141) lap 1 starts at the explicit signal
+## tick; a grid slot behind the line crosses gate 0 once to clear the grid, a slot past the
+## line goes straight to gate 1 (#143). Out-of-order crossings are ignored. `sector_end_gates` lists the gate indices ending sector 1 and 2;
 ## the last sector ends at the finish line, so sector ticks always sum to the lap ticks.
 
 signal lap_completed(record: Dictionary)
@@ -89,6 +91,7 @@ func _accept(i: int) -> void:
 		next_gate = 1
 		last_gate_crossed = 0
 		return
+	_awaiting_line = false  # a gate i>0 was accepted: the car started past the line, gate 0 now closes the lap
 	if sector_end_gates.has(i):
 		_close_sector()
 	last_gate_crossed = i

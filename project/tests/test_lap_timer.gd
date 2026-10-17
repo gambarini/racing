@@ -161,3 +161,71 @@ func test_standing_start_lap2_is_gate_to_gate() -> void:
 	_drive(flying, 3)
 	assert_eq(timer.laps[1]["ticks"], flying.laps[1]["ticks"], "lap 2 = gate-0 to gate-0")
 	assert_eq(timer.laps[2]["ticks"], flying.laps[2]["ticks"])
+
+
+## Drive a standing-start timer from `start_angle` through `laps` circuits ending just past the line.
+func _drive_standing(timer: LapTimer, start_angle: float, end_angle: float, idle := 3) -> void:
+	timer.start_standing()
+	var step_angle := SPEED * DT / R
+	var a := start_angle
+	for i in idle:
+		timer.step(_point(a))
+	while a < end_angle:
+		a += step_angle
+		timer.step(_point(a))
+
+
+func test_standing_start_grid_past_line_gate1_first() -> void:
+	var timer := track.make_lap_timer(DT)
+	timer.start_standing()  # tick 0
+	var step_angle := SPEED * DT / R
+	var a := 0.1  # past gate 0: gate 1 is crossed first
+	var close_tick := 0
+	timer.step(_point(a))
+	while a < TAU + 0.05:
+		a += step_angle
+		timer.step(_point(a))
+		if close_tick == 0 and timer.laps.size() == 1:
+			close_tick = timer.tick
+	assert_eq(timer.laps.size(), 1, "gate 0 closes the lap, not swallowed")
+	assert_eq(timer.out_of_order_crossings, 0)
+	assert_eq(timer.laps[0]["ticks"], close_tick, "lap ticks = gate-0 tick minus start tick (0)")
+	var sum := 0
+	for st in timer.laps[0]["sector_ticks"]:
+		sum += st
+	assert_eq(sum, timer.laps[0]["ticks"])
+
+
+func test_standing_start_normal_grid_single_lap_and_two_laps() -> void:
+	var timer := track.make_lap_timer(DT)
+	_drive_standing(timer, -0.05, TAU + 0.05)
+	assert_eq(timer.laps.size(), 1)
+	assert_eq(timer.out_of_order_crossings, 0)
+	var t2 := track.make_lap_timer(DT)
+	_drive_standing(t2, -0.05, 2.0 * TAU + 0.05)
+	assert_eq(t2.laps.size(), 2)
+	for lap in t2.laps:
+		var s := 0
+		for st in lap["sector_ticks"]:
+			s += st
+		assert_eq(s, lap["ticks"])
+
+
+func test_standing_gate0_before_gate1_only_clears_grid() -> void:
+	var timer := track.make_lap_timer(DT)
+	timer.start_standing()
+	var start := timer.current_lap_ticks()
+	_drive_standing_noreset(timer, -0.05, 0.3)
+	assert_eq(timer.laps.size(), 0)
+	assert_true(timer.running)
+	assert_eq(timer.current_lap_ticks(), timer.tick, "lap start tick unchanged (0)")
+	assert_eq(start, 0)
+
+
+func _drive_standing_noreset(timer: LapTimer, start_angle: float, end_angle: float) -> void:
+	var step_angle := SPEED * DT / R
+	var a := start_angle
+	timer.step(_point(a))
+	while a < end_angle:
+		a += step_angle
+		timer.step(_point(a))
