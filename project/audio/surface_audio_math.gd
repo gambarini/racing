@@ -29,15 +29,23 @@ static func slip_gain(p: SurfaceAudioProfile, slip: float) -> float:
 	return p.slip_gain * t * t * (3.0 - 2.0 * t)
 
 
-## Gamepad motor amplitudes (x = weak/high-frequency, y = strong/low-frequency) for one wheel's
-## surface at wheel speed and slip. Zero when the wheel is not on the ground (caller).
-static func rumble(p: SurfaceAudioProfile, speed: float, slip: float) -> Vector2:
+## Fraction 0..1 of the slip range above the threshold.
+static func slip_fraction(p: SurfaceAudioProfile, slip: float) -> float:
+	if slip <= p.slip_threshold:
+		return 0.0
+	return clampf((slip - p.slip_threshold) / maxf(p.slip_full - p.slip_threshold, 1e-6), 0.0, 1.0)
+
+
+## Gamepad weak (high-frequency) motor amplitude for one wheel's surface at speed and slip.
+static func rumble_weak(p: SurfaceAudioProfile, speed: float, slip: float) -> float:
 	var t := clampf(absf(speed) / p.roll_speed_ref, 0.0, 1.0)
-	var s := 0.0
-	if slip > p.slip_threshold:
-		s = clampf((slip - p.slip_threshold) / maxf(p.slip_full - p.slip_threshold, 1e-6), 0.0, 1.0)
-	var k := t * (1.0 + p.rumble_slip_boost * s)
-	return Vector2(clampf(p.rumble_weak * k, 0.0, 1.0), clampf(p.rumble_strong * k, 0.0, 1.0))
+	return clampf(p.rumble_weak * t * (1.0 + p.rumble_slip_boost * slip_fraction(p, slip)), 0.0, 1.0)
+
+
+## Gamepad strong (low-frequency) motor amplitude.
+static func rumble_strong(p: SurfaceAudioProfile, speed: float, slip: float) -> float:
+	var t := clampf(absf(speed) / p.roll_speed_ref, 0.0, 1.0)
+	return clampf(p.rumble_strong * t * (1.0 + p.rumble_slip_boost * slip_fraction(p, slip)), 0.0, 1.0)
 
 
 ## Move a linear gain toward `target` without exceeding MAX_STEP_DB_PER_50MS above FLOOR, so

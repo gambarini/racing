@@ -35,8 +35,17 @@ func make_audio(wheels: Array[Wheel]) -> VehicleAudio:
 	var a := VehicleAudio.new()
 	a.wheels = wheels
 	a.rumble_enabled = false
+	a.is_player = true
 	get_root().add_child(a)
 	return a
+
+
+## Player property of the lazily created loop for a surface; silent defaults when not created.
+func db_of(a: VehicleAudio, arr: Array, id: StringName, prop: String) -> float:
+	var pl: AudioStreamPlayer = arr[a._idx[id]] if a._idx.has(id) else null
+	if pl == null:
+		return -80.0 if prop == "volume_db" else 1.0
+	return pl.get(prop)
 
 
 func _initialize() -> void:
@@ -64,21 +73,21 @@ func _initialize() -> void:
 	var a := make_audio(ws)
 	for i in 30:
 		a.step(DT)
-	var roll_lo: float = a._roll[&"tarmac"].volume_db
-	var pitch_lo: float = a._roll[&"tarmac"].pitch_scale
+	var roll_lo: float = db_of(a, a._roll, &"tarmac", "volume_db")
+	var pitch_lo: float = db_of(a, a._roll, &"tarmac", "pitch_scale")
 	for w in ws:
 		w.omega = 35.0 / 0.32
 	for i in 60:
 		a.step(DT)
-	check(a._roll[&"tarmac"].volume_db > roll_lo and a._roll[&"tarmac"].pitch_scale > pitch_lo,
+	check(db_of(a, a._roll, &"tarmac", "volume_db") > roll_lo and db_of(a, a._roll, &"tarmac", "pitch_scale") > pitch_lo,
 			"roll player volume and pitch rise with wheel speed")
-	check(a._slip[&"tarmac"].volume_db <= -79.0, "slip player silent below threshold")
+	check(db_of(a, a._slip, &"tarmac", "volume_db") <= -79.0, "slip player silent below threshold")
 	for w in ws:
 		w.kappa = 0.3
 	for i in 60:
 		a.step(DT)
-	check(a._slip[&"tarmac"].volume_db > -20.0, "slip player audible above threshold")
-	check(a._roll[&"gravel"].volume_db <= -79.0, "other surfaces' loops stay silent")
+	check(db_of(a, a._slip, &"tarmac", "volume_db") > -20.0, "slip player audible above threshold")
+	check(db_of(a, a._roll, &"gravel", "volume_db") <= -79.0, "other surfaces' loops stay silent")
 
 	# 4. crossfade tarmac -> gravel by weights, slew-limited (< 6 dB per 50 ms)
 	for w in ws:
@@ -92,8 +101,8 @@ func _initialize() -> void:
 				w.surface_weights = {&"gravel": 1.0}
 				w.surface_id = &"gravel"
 		a.step(DT)
-		hist_t.append(a._roll[&"tarmac"].volume_db)
-		hist_g.append(a._roll[&"gravel"].volume_db)
+		hist_t.append(db_of(a, a._roll, &"tarmac", "volume_db"))
+		hist_g.append(db_of(a, a._roll, &"gravel", "volume_db"))
 	var worst := 0.0
 	for h in [hist_t, hist_g]:
 		for i in range(3, h.size()):
@@ -108,6 +117,21 @@ func _initialize() -> void:
 	var rg := rumble_for(&"gravel")
 	check((rg.y - rt.y) / rg.y >= 0.3, "strong motor tarmac %.3f vs gravel %.3f differs >= 30%%" % [rt.y, rg.y])
 	check((rg.x - rt.x) / rg.x >= 0.3, "weak motor tarmac %.3f vs gravel %.3f differs >= 30%%" % [rt.x, rg.x])
+
+	# 6. voice budget and non-player isolation
+	var ap := make_audio(make_wheels({&"tarmac": 1.0}, 20.0))
+	for i in 10:
+		ap.step(DT)
+	check(ap.player_count() == 4 + 2, "player car on one surface: 4 impact + 2 loops (%d)" % ap.player_count())
+	free_all(ap)
+	var ai := VehicleAudio.new()
+	ai.wheels = make_wheels({&"gravel": 1.0}, 30.0, 0.4)
+	get_root().add_child(ai)
+	for i in 10:
+		ai.step(DT)
+	check(ai.player_count() == 0, "non-player car creates no audio players")
+	check(ai.rumble_weak == 0.0 and ai.rumble_strong == 0.0 and not ai._rumbling, "non-player never rumbles")
+	free_all(ai)
 
 	SurfaceAudioRegistry.clear()
 	print("RESULT: ", "OK" if failures == 0 else "FAILED (%d)" % failures)

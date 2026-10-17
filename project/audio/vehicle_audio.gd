@@ -1,7 +1,10 @@
-## Per-surface tire audio and gamepad rumble for one vehicle (#21). Add as a child of a Vehicle
-## (or call bind_vehicle); it only reads Wheel state, vehicle.gd is untouched.
-## One rolling and one slip looping player per surface id; their gains are the wheel-averaged
-## surface weights (#19) times the wheel's speed/slip level, slewed so crossfades never click.
+## Per-surface tire audio and gamepad rumble for the player's vehicle (#21). Add as a child of a
+## Vehicle (or call bind_vehicle); it only reads Wheel state, vehicle.gd is untouched.
+## Wiring into the car scene is tracked in #130. The spawner must set `is_player` on the player's
+## car only: other instances (AI, ghosts) create no players and never touch the gamepad.
+## Loops are created lazily, one rolling + one slip player per surface actually seen under a wheel;
+## their gains are the wheel-averaged surface weights (#19) times the wheel's speed/slip level,
+## slewed so crossfades never click. step() allocates nothing.
 class_name VehicleAudio
 extends Node
 
@@ -9,6 +12,7 @@ const IMPACT_MIN_RATE := 0.3 ## m/s compression rate that counts as a landing
 const IMPACT_FULL_RATE := 3.0 ## m/s compression rate for full impact volume
 const RUMBLE_DURATION := 0.1 ## s per start_joy_vibration call (refreshed every tick)
 
+@export var is_player := false ## only the player car makes tire sound and rumble
 @export var rumble_enabled := true
 @export var rumble_scale := 1.0 ## user setting, 0..1
 @export var joy_device := 0
@@ -18,12 +22,20 @@ var rumble_weak := 0.0 ## last computed motor amplitudes (valid with or without 
 var rumble_strong := 0.0
 
 var _ids: Array = []
-var _roll: Dictionary = {} ## id -> AudioStreamPlayer
-var _slip: Dictionary = {}
-var _roll_g: Dictionary = {} ## id -> current slewed gain
-var _slip_g: Dictionary = {}
+var _idx: Dictionary = {} ## surface id -> index into the arrays below
+var _profiles: Array[SurfaceAudioProfile] = []
+var _roll: Array[AudioStreamPlayer] = [] ## null until the surface is first seen
+var _slip: Array[AudioStreamPlayer] = []
+var _roll_g := PackedFloat32Array() ## current slewed gains
+var _slip_g := PackedFloat32Array()
+var _roll_t := PackedFloat32Array() ## per-tick targets (scratch, reused)
+var _slip_t := PackedFloat32Array()
+var _speed_sum := PackedFloat32Array()
+var _weight_sum := PackedFloat32Array()
 var _impact: Array[AudioStreamPlayer] = [] ## one per wheel
 var _was_grounded: Array[bool] = []
+var _have_pad := false
+var _rumbling := false
 var _built := false
 
 
@@ -31,11 +43,21 @@ func _ready() -> void:
 	var v := get_parent()
 	if v is Vehicle:
 		bind_vehicle(v)
-	_build()
+	if is_player:
+		_build()
 
 
 func bind_vehicle(v: Vehicle) -> void:
 	wheels = v.wheels
+
+
+## Number of AudioStreamPlayer children (voice budget; tested).
+func player_count() -> int:
+	var n := 0
+	for c in get_children():
+		if c is AudioStreamPlayer:
+			n += 1
+	return n
 
 
 func _build() -> void:
@@ -43,17 +65,25 @@ func _build() -> void:
 		return
 	_built = true
 	_ids = SurfaceRegistry.ids()
-	for id in _ids:
-		var p := SurfaceAudioRegistry.get_profile(id)
-		_roll[id] = _make_loop(p.roll_stream)
-		_slip[id] = _make_loop(p.slip_stream)
-		_roll_g[id] = 0.0
-		_slip_g[id] = 0.0
+	var k := _ids.size()
+	for i in k:
+		_idx[_ids[i]] = i
+		_profiles.append(SurfaceAudioRegistry.get_profile(_ids[i]))
+		_roll.append(null)
+		_slip.append(null)
+	for arr in [_roll_g, _slip_g, _roll_t, _slip_t, _speed_sum, _weight_sum]:
+		arr.resize(k)
 	for i in 4:
 		var pl := AudioStreamPlayer.new()
 		add_child(pl)
 		_impact.append(pl)
 		_was_grounded.append(false)
+	_have_pad = not Input.get_connected_joypads().is_empty()
+	Input.joy_connection_changed.connect(_on_joy_changed)
+
+
+func _on_joy_changed(_device: int, _connected: bool) -> void:
+	_have_pad = not Input.get_connected_joypads().is_empty()
 
 
 func _make_loop(stream: AudioStream) -> AudioStreamPlayer:
@@ -86,19 +116,17 @@ func _physics_process(delta: float) -> void:
 
 ## One audio-state update. Public so tests can drive it with hand-set Wheel state.
 func step(delta: float) -> void:
+	if not is_player:
+		return
 	_build()
 	var n := wheels.size()
 	if n == 0:
 		return
-	var roll_t: Dictionary = {}
-	var slip_t: Dictionary = {}
-	var speed_sum: Dictionary = {}
-	var weight_sum: Dictionary = {}
-	for id in _ids:
-		roll_t[id] = 0.0
-		slip_t[id] = 0.0
-		speed_sum[id] = 0.0
-		weight_sum[id] = 0.0
+	var k := _ids.size()
+	_roll_t.fill(0.0)
+	_slip_t.fill(0.0)
+	_speed_sum.fill(0.0)
+	_weight_sum.fill(0.0)
 	var weak := 0.0
 	var strong := 0.0
 	for i in n:
@@ -111,33 +139,37 @@ func step(delta: float) -> void:
 		var speed := absf(w.omega * w.radius)
 		var slip := SurfaceAudioMath.slip_amount(w.kappa, w.alpha)
 		for id in w.surface_weights:
-			if not _roll.has(id):
+			var s: int = _idx.get(id, -1)
+			if s < 0:
 				continue
 			var wt: float = w.surface_weights[id]
-			var p := SurfaceAudioRegistry.get_profile(id)
-			roll_t[id] += wt * SurfaceAudioMath.roll_gain(p, speed) / n
-			slip_t[id] += wt * SurfaceAudioMath.slip_gain(p, slip) / n
-			speed_sum[id] += wt * speed
-			weight_sum[id] += wt
-			var r := SurfaceAudioMath.rumble(p, speed, slip)
-			weak += wt * r.x / n
-			strong += wt * r.y / n
-	for id in _ids:
-		_roll_g[id] = SurfaceAudioMath.slew(_roll_g[id], roll_t[id], delta)
-		_slip_g[id] = SurfaceAudioMath.slew(_slip_g[id], slip_t[id], delta)
-		var p := SurfaceAudioRegistry.get_profile(id)
-		var avg_speed: float = speed_sum[id] / weight_sum[id] if weight_sum[id] > 0.0 else 0.0
-		_apply(_roll[id], _roll_g[id], SurfaceAudioMath.roll_pitch(p, avg_speed))
-		_apply(_slip[id], _slip_g[id], 1.0)
+			var p := _profiles[s]
+			_roll_t[s] += wt * SurfaceAudioMath.roll_gain(p, speed) / n
+			_slip_t[s] += wt * SurfaceAudioMath.slip_gain(p, slip) / n
+			_speed_sum[s] += wt * speed
+			_weight_sum[s] += wt
+			weak += wt * SurfaceAudioMath.rumble_weak(p, speed, slip) / n
+			strong += wt * SurfaceAudioMath.rumble_strong(p, speed, slip) / n
+	for s in k:
+		if _roll[s] == null:
+			if _roll_t[s] <= 0.0 and _slip_t[s] <= 0.0:
+				continue # surface never heard yet: no players
+			_roll[s] = _make_loop(_profiles[s].roll_stream)
+			_slip[s] = _make_loop(_profiles[s].slip_stream)
+		_roll_g[s] = SurfaceAudioMath.slew(_roll_g[s], _roll_t[s], delta)
+		_slip_g[s] = SurfaceAudioMath.slew(_slip_g[s], _slip_t[s], delta)
+		var avg_speed := _speed_sum[s] / _weight_sum[s] if _weight_sum[s] > 0.0 else 0.0
+		_apply(_roll[s], _roll_g[s], SurfaceAudioMath.roll_pitch(_profiles[s], avg_speed))
+		_apply(_slip[s], _slip_g[s], 1.0)
 	rumble_weak = clampf(weak, 0.0, 1.0)
 	rumble_strong = clampf(strong, 0.0, 1.0)
 	_send_rumble()
 
 
 func _apply(pl: AudioStreamPlayer, gain: float, pitch: float) -> void:
-	pl.volume_db = linear_to_db(gain) if gain > 0.0001 else -80.0
-	pl.pitch_scale = pitch
 	var should_play := gain > 0.0001
+	pl.volume_db = linear_to_db(gain) if should_play else -80.0
+	pl.pitch_scale = pitch
 	if should_play and not pl.playing and pl.is_inside_tree():
 		pl.play()
 	elif not should_play and pl.playing:
@@ -147,7 +179,8 @@ func _apply(pl: AudioStreamPlayer, gain: float, pitch: float) -> void:
 func _check_impact(i: int, w: Wheel) -> void:
 	if not w.is_grounded or _was_grounded[i] or w.compression_rate < IMPACT_MIN_RATE:
 		return
-	var p := SurfaceAudioRegistry.get_profile(w.surface_id)
+	var s: int = _idx.get(w.surface_id, -1)
+	var p := _profiles[s] if s >= 0 else _profiles[0]
 	var pl := _impact[i]
 	pl.stream = p.impact_stream
 	pl.volume_db = linear_to_db(p.impact_gain * clampf(w.compression_rate / IMPACT_FULL_RATE, 0.1, 1.0))
@@ -156,12 +189,13 @@ func _check_impact(i: int, w: Wheel) -> void:
 
 
 func _send_rumble() -> void:
-	if not rumble_enabled or Input.get_connected_joypads().is_empty():
+	if not is_player or not rumble_enabled or not _have_pad:
 		return
+	_rumbling = true
 	Input.start_joy_vibration(joy_device, rumble_weak * rumble_scale, rumble_strong * rumble_scale,
 			RUMBLE_DURATION)
 
 
 func _exit_tree() -> void:
-	if not Input.get_connected_joypads().is_empty():
+	if is_player and _rumbling:
 		Input.stop_joy_vibration(joy_device)
