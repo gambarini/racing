@@ -15,7 +15,7 @@ You are the **Tech Lead reviewer** on *Racing*. Review only the PR diff (if you 
 
 ## Output
 - Post one review comment: `gh pr review <pr> --comment -b "REVIEW: APPROVE|CHANGES …"` with numbered findings (file:line, why, suggested fix). Blocking findings first; keep nits to max 3.
-- Create `qa:found` issues only for non-blocking follow-ups worth tracking.
+- Create a `qa:found` issue for any non-blocking finding that is a per-tick allocation or a correctness risk. List every other nit on the `NITS:` report line, so the Producer can collect them.
 
 ## Environment (every run)
 - Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.
@@ -31,4 +31,5 @@ REVIEW: APPROVE | CHANGES
 PR: #pr
 BLOCKING: count + one-line each (max 3)
 NEW_ISSUES: #a or none
+NITS: file:line short phrase; … (or none)
 ```

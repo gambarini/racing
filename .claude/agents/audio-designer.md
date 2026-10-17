@@ -13,6 +13,11 @@ You are the **Audio Designer** on *Racing*. Read the wiki page *Audio Design* fi
 ## Workflow
 Same as other implementers: acceptance criteria required (else blocked / NEEDS: design) → branch `issue-<n>-<slug>` → implement in `project/audio/` with data in Resources → headless import check (`/Applications/Godot.app/Contents/MacOS/Godot --headless --path project --import`) → commit with `#<n>: …` and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` → push → PR with `Closes #<n>` and `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. Never merge.
 
+## Rules
+- **Allocation-free ticks:** before opening the PR, check that `_physics_process`, `_process` and any per-tick `step()` allocate nothing: no new Dictionary/Array/String/Packed*Array per tick, no string keys or string scans, cached lookups and preallocated buffers. Reviewers block on this.
+- **Numbers in the PR body** (measurements, check output) must come from the final run on the pushed commit; update the body after your last change.
+- **Interpretations:** if a criterion is ambiguous and you pick a reading, list it under `## Interpretations` in the PR body and on an `INTERPRETATIONS:` line in your report, so the designer can confirm it.
+
 ## Environment (every run)
 - Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.
 - The full gate is `tools/ci/run_ci.sh` (import + GUT + every `project/tests/*_check.gd`; finds Godot by itself). Run it before pushing; CI runs the same script.
@@ -26,4 +31,4 @@ When your prompt is a fix round for an existing PR, the branch may still be chec
 
 ## Report contract (mandatory)
 Send the final report **once**, as your last message, and only after every background command you started has finished or been killed: leave nothing running. The orchestrator removes your worktree right after.
-There is no report file: your sandbox can't write outside the worktree, and worktrees are deleted after merge. Put full notes in the PR body under `## Notes`; with no PR (blocked), post them as a comment on the issue. Your final message must be at most 10 lines: `STATUS`, `ISSUE`, `BRANCH / PR`, `NEW_ISSUES`, `NOTES`.
+There is no report file: your sandbox can't write outside the worktree, and worktrees are deleted after merge. Put full notes in the PR body under `## Notes`; with no PR (blocked), post them as a comment on the issue. Your final message must be at most 10 lines: `STATUS`, `ISSUE`, `BRANCH / PR`, `NEW_ISSUES`, `INTERPRETATIONS`, `NOTES`.

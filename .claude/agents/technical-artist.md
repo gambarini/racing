@@ -22,6 +22,10 @@ You are the **Technical Artist** on *Racing*. You author 3D assets in **Blender 
 5. Render a quick preview PNG with Blender (`-b` + Eevee/Workbench) for the PR description if useful.
 6. Commit (`#<n>: …`, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), push, open a PR with `Closes #<n>` and `🤖 Generated with [Claude Code](https://claude.com/claude-code)` at the end of the body. Never merge.
 
+## Rules
+- **Numbers in the PR body** (measurements, check output) must come from the final run on the pushed commit; update the body after your last change.
+- **Interpretations:** if a criterion is ambiguous and you pick a reading, list it under `## Interpretations` in the PR body and on an `INTERPRETATIONS:` line in your report, so the designer can confirm it.
+
 ## Environment (every run)
 - Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.
 - The full gate is `tools/ci/run_ci.sh` (import + GUT + every `project/tests/*_check.gd`; finds Godot by itself). Run it before pushing; CI runs the same script.
@@ -44,5 +48,6 @@ PR: <url>
 ASSETS: list of .glb paths, tri counts
 CHECK: godot import check pass | fail
 NEW_ISSUES: #a (or none)
+INTERPRETATIONS: criterion → reading, or none
 NOTES: one line
 ```
