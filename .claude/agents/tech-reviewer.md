@@ -19,6 +19,8 @@ You are the **Tech Lead reviewer** on *Racing*. Review only the PR diff (if you 
 - Create a `qa:found` issue for any non-blocking finding that is a per-tick allocation or a correctness risk. List every other nit on the `NITS:` report line, so the Producer can collect them.
 
 ## Environment (every run)
+- Read issues with `--json` (as above), never plain `gh issue view`: here it can print nothing, and long checklists in the body get missed. Read the whole body and every comment; criteria and checklist items can be in either.
+- Run `tools/ci/run_ci.sh` in the **foreground** with a 600000 ms timeout, not in the background. Local runs take a machine-wide lock, so a run may first print `run_ci: waiting for another local run`; let it wait. If you do background a command, wait for its completion before you report. Stray background CI loads the machine for every other agent and keeps your worktree in use.
 - Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.
 - If `main` moved in the same area after QA ran, merge `origin/main` into your detached checkout locally (don't push), run `tools/ci/run_ci.sh`, and treat a red result as a blocking finding.
 - Create issues one per `gh issue create` call, and add each to the roadmap board right after: `gh project item-add 2 --owner gambarini --url <issue url>`.

@@ -16,17 +16,51 @@ LOGDIR="${1:-$ROOT/ci-logs}"
 mkdir -p "$LOGDIR"
 rc=0
 
-run_step() { # name, then command...
-  local name="$1"; shift
-  local log="$LOGDIR/$name.log"
+# Local runs from parallel agent worktrees serialize on one machine-wide lock: three concurrent
+# runs pushed the load average to 8-14 and failed the wall-time checks (session 2026-10-18).
+# GitHub CI ($CI set) and RUN_CI_NO_LOCK=1 skip it. A lock whose owner pid is gone is stale.
+if [ -z "${CI:-}" ] && [ -z "${RUN_CI_NO_LOCK:-}" ]; then
+  LOCK="${RUN_CI_LOCK:-/tmp/racing-run-ci.lock}"
+  waited=0
+  until mkdir "$LOCK" 2>/dev/null; do
+    if [ ! -d "$LOCK" ]; then echo "run_ci: can't create $LOCK, running without the lock"; LOCK=; break; fi
+    owner="$(cat "$LOCK/pid" 2>/dev/null)"
+    if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then rm -rf "$LOCK"; continue; fi
+    [ $((waited % 60)) -eq 0 ] && echo "run_ci: waiting for another local run (pid ${owner:-?}, $(cat "$LOCK/dir" 2>/dev/null)); ${waited}s"
+    sleep 5; waited=$((waited + 5))
+  done
+  if [ -n "$LOCK" ]; then
+    echo $$ > "$LOCK/pid"; echo "$ROOT" > "$LOCK/dir"
+    trap 'rm -rf "$LOCK"' EXIT
+    trap 'exit 130' INT TERM
+  fi
+fi
+
+# Wall-clock-sensitive checks: locally, a failure is retried once and logged as RETRY, so a
+# load spike from a benchmark or a single-check run elsewhere doesn't fail the gate. CI never retries.
+TIMING_STEPS=" quarry_timetrial_check telemetry_check surface_cache_timing_check "
+
+run_once() { # tag, name, log, command...  (tag: "STEP FAILED", or "ATTEMPT FAILED" before a retry)
+  local tag="$1" name="$2" log="$3"; shift 3
   echo "::group::$name"
   "$@" 2>&1 | tee "$log"
   local code=${PIPESTATUS[0]}
   echo "::endgroup::"
-  if [ "$code" -ne 0 ]; then echo "STEP FAILED: $name (exit $code)"; rc=1; fi
+  if [ "$code" -ne 0 ]; then echo "$tag: $name (exit $code)"; return 1; fi
   if grep -E "(SCRIPT ERROR|ERROR):" "$log" >/dev/null; then
-    echo "STEP FAILED: $name (ERROR in output)"; grep -nE "SCRIPT ERROR|ERROR:" "$log" | head -20; rc=1
+    echo "$tag: $name (ERROR in output)"; grep -nE "SCRIPT ERROR|ERROR:" "$log" | head -20; return 1
   fi
+}
+
+run_step() { # name, then command...
+  local name="$1"; shift
+  local log="$LOGDIR/$name.log"
+  if [ -z "${CI:-}" ] && [[ "$TIMING_STEPS" == *" $name "* ]]; then
+    run_once "ATTEMPT FAILED" "$name" "$log" "$@" && return 0
+    echo "RETRY: $name (timing check, load: $(uptime | sed 's/.*load averages*: //'))"
+  fi
+  run_once "STEP FAILED" "$name" "$log" "$@" && return 0
+  rc=1
 }
 
 cd "$ROOT"

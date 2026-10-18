@@ -18,7 +18,7 @@ All settings (repo, Project field IDs, tool paths, thresholds, role mapping) are
 
 ## 1. Preflight (stop and report if a blocker fails)
 Run these in as few tool calls as possible:
-0. Load deferred tools in one call: `ToolSearch` with `select:mcp__ccd_session_mgmt__get_usage,TaskStop`. If `get_usage` is not available (e.g. plain CLI), treat plan usage as `unavailable`, run serially and rely on time only.
+0. Load deferred tools in one call: `ToolSearch` with `select:mcp__ccd_session_mgmt__get_usage,TaskStop,mcp__ccd_host__request_keep_awake`. If `get_usage` is not available (e.g. plain CLI), treat plan usage as `unavailable`, run serially and rely on time only.
 1. `date` → now; compute `end_at`, `wind_down_at = end_at − max(wind_down_min_minutes, avg task minutes)`.
 2. `mcp__ccd_session_mgmt__get_usage` → plan windows (5-hour, weekly) and **this session's** context %. Record a baseline.
    - 5-hour ≥ `five_hour_serial_below_pct` and it resets after `end_at` → tell the user the session can't do real work; stop.
@@ -32,6 +32,7 @@ Run these in as few tool calls as possible:
 6. **Authorization (ask once, AskUserQuestion):** "May agents push branches and open PRs, and may I squash-merge PRs that pass QA (and review) into main during this session?" Options: *Push + PR + merge* / *Push + PR only (I merge)* / *Local branches only*. Store the answer in state as `merge_policy`. Never exceed it.
 7. Write `state.json` (schema in §7) and create `reports/`.
 8. **Start the deadline watchdog:** Bash with `run_in_background: true`: `sleep <seconds until wind_down_at>; echo WIND_DOWN` — and a second one for `end_at` with `echo HARD_STOP`. Store their task ids. These wake you even if no agent is running.
+8b. **Keep the machine awake** until `end_at`. Call `mcp__ccd_host__request_keep_awake` with `until: "session_idle"`, and also start a background `caffeinate -i -t <seconds until end_at>` (store its task id as `watchdogs.caffeinate`). In session 2026-10-18 two QA runs took more than 70 min of wall time instead of 5, almost certainly because the machine went to sleep. A closed lid still sleeps; tell the user so in the preflight summary.
 9. Tell the user in ≤5 lines: end time, usage baseline, disk, merge policy, first items. Then start the loop without waiting.
 
 ## 2. The queue (what to work on next)
@@ -49,6 +50,7 @@ Set Status with `.claude/build/board.sh <issue> <todo|in_progress|done>`. Run th
 **Role for an item:** first matching `role_by_label` entry by its `area:*` labels, else `default`. `area:design` items go to `game-designer` directly.
 
 **Parallelism:** two items may run at the same time only if their `area:*` labels are disjoint **and** neither depends on the other (an item depends on an earlier open item in the same milestone that its body or the wiki names, or that touches the same system). When unsure, run serially.
+**CI load:** local `tools/ci/run_ci.sh` runs take a machine-wide lock, so a second CI-running agent queues behind the first instead of loading the machine. Three concurrent runs pushed the load average to 8–14 and failed the wall-time checks. Prefer pairing one CI-running agent (build, QA) with one that doesn't run CI (design gate, review), rather than with two builds.
 
 ## 3. Per-item pipeline
 For each picked issue `#n` (set Project Status → In Progress with `.claude/build/board.sh <n> in_progress`):
@@ -63,7 +65,7 @@ For each picked issue `#n` (set Project Status → In Progress with `.claude/bui
    - **Wiki-only FAIL:** if QA fails only on a wiki criterion and the text is ready (staged, or in the PR body), launch `game-designer` to publish it right away, then rerun QA. Don't leave the PR waiting.
    - **Performance items:** don't run a benchmark-dependent build or QA in parallel with other worktree agents (machine load skews timings by 2–3×). Dispatch it alone, and judge a perf verdict only from interleaved before/after runs.
 4. **Review** — from milestone `separate_review_from_milestone` onwards, and only for PRs that change code: launch `tech-reviewer` after QA PASS. CHANGES with blocking findings → one fix round, then QA again.
-5. **Merge** (only if `merge_policy` allows): if `main` moved in the same area since QA ran (another merge touched the same system), have the reviewer, or a quick QA rerun, verify the PR merged with `origin/main` first. Then run `.claude/build/merge.sh <pr> <issue> <agent ids of this item's worktree agents>`. It checks that every PR check is `pass` (exit 2 and touches nothing otherwise), marks the PR ready, squash-merges, verifies `MERGED`, pulls `base_branch`, sets the board to Done and removes the listed agents' worktrees and branches. On exit 2 with pending checks, wait with a background `gh pr checks <pr> --watch --interval 20`, end your turn and rerun it. The issue closes via `Closes #n`.
+5. **Merge** (only if `merge_policy` allows): if `main` moved in the same area since QA ran (another merge touched the same system), have the reviewer, or a quick QA rerun, verify the PR merged with `origin/main` first. Name in that prompt the PR that merged, the files the two share, and the checks to rerun on the merged tree (e.g. "#180 added ai_lap_check BOUNDS; #176 edits ai_driver.gd; rerun ai_lap_check and ai_tactics_check"). A red result there is blocking. Then run `.claude/build/merge.sh <pr> <issue> <agent ids of this item's worktree agents>`. It checks that every PR check is `pass` (exit 2 and touches nothing otherwise), marks the PR ready, squash-merges, verifies `MERGED`, pulls `base_branch`, sets the board to Done (or Todo, with a message, when the issue is still open because the PR only `Refs` it) and removes the listed agents' worktrees and branches. On exit 2 with pending checks, wait with a background `gh pr checks <pr> --watch --interval 20`, end your turn and rerun it. The issue closes via `Closes #n`.
    - **Human checks:** if QA reported a `HUMAN_CHECK:` line, file one issue after the merge: title `Human check: <what> (#n)`, labels `needs:human-check` + the item's `area:*`, same milestone, body with what to check and where, assigned to the repo owner. Add it to the board and record it in `state.human_checks`.
    - **Before any cleanup**, `TaskStop` every agent of this item whose task notification said "waiting on its own background work". Agents sometimes hand back their report but leave a background command running, and that keeps their worktree in use.
 6. Record the item outcome, duration and usage cost in state. Also record the reviewer's `NITS:` and the builder's `INTERPRETATIONS:` (if not `none`) under `state.nits` / `state.interpretations` with the issue and PR numbers.
@@ -77,6 +79,7 @@ Branch: issue-<n>-<slug> from origin/main.   [PR: #<pr> — for QA/review/fix ro
 [QA/review: check out with `gh pr checkout <pr> --detach` — the branch may still be checked out in another worktree.]
 [Fix round: `git fetch origin && git checkout --detach origin/issue-<n>-<slug>`, commit, then `git push origin HEAD:refs/heads/issue-<n>-<slug>`.]
 Session deadline: <end_at>. Commit and push work-in-progress at least every 20 minutes; if you get stopped, the branch must be usable.
+[Late dispatch (less than ~75 min to wind_down / end_at): give a concrete cutoff instead of only the deadline: "open the PR by <HH:MM>Z" for builds, "post your verdict by <HH:MM>Z" for QA/review. Leave ≥20 min after a build cutoff for QA+review.]
 [Fix round: the findings are in the latest QA FAIL / REVIEW comment on PR #<pr> (`gh pr view <pr> --comments`); address only those.]
 Return only the report-contract block from your instructions.
 ```
@@ -108,7 +111,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
 - **WIND_DOWN** (watchdog or rule): stop dispatching new items. Let in-flight build agents finish; run QA/merge only if it fits before `end_at`. Use the wait to file the follow-up issues below, so the end is only report writing.
 - **Late finish** (little time left before `end_at`): run QA and review of the last PR in parallel instead of in sequence, with a hard time limit in both prompts. Merge only if both pass.
 - **HARD_STOP** at `end_at`: `TaskStop` every in-flight agent (they have committed WIP). For each unfinished item: make sure its branch is pushed (if policy allows), leave the PR as draft, comment on the issue with where it stopped (one paragraph, from the agent's last report), keep Project Status = In Progress.
-- Kill the remaining watchdog/cooldown background tasks.
+- Kill the remaining watchdog/cooldown/caffeinate background tasks.
 - **Follow-ups:** from `state.nits`, file one issue "Tech debt from session <date>" (`type:task`, current milestone) listing each nit with issue/PR. From `state.interpretations`, file one `area:design` issue asking the game-designer to confirm the readings and record them on the wiki. Add both to the board and link them in the report.
 - Write the **session report** to `<state_dir>/reports/session-<date>.md`: start/end, items merged (#, PR), items in progress, QA-found issues created, blocked items with reason, open `needs:human-check` issues (`gh issue list --label needs:human-check`), usage used (5-hour Δ, weekly Δ), cost calibration table, recommendations for next session. Publish it to the wiki:
   1. Clone `wiki_git` into a temp dir and run `git config commit.gpgsign false` there (wiki commits are unsigned).
@@ -136,7 +139,7 @@ Call `get_usage` and `date` **before each dispatch decision** (not on every wake
   "started_at": "ISO", "end_at": "ISO", "wind_down_at": "ISO",
   "merge_policy": "merge|pr|local",
   "milestone_filter": null, "max_parallel": 2,
-  "watchdogs": {"wind_down": "<task id>", "hard_stop": "<task id>", "cooldown": null},
+  "watchdogs": {"wind_down": "<task id>", "hard_stop": "<task id>", "caffeinate": "<task id>", "cooldown": null},
   "usage_baseline": {"five_hour": 9, "weekly": 2},
   "in_flight": [{"issue": 1, "role": "gameplay-developer", "agent": "<id/name>", "round": 1, "pr": null, "started_at": "ISO", "usage_at_start": 12}],
   "project_items": {"1": "PVTI_…"},
