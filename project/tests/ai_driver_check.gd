@@ -11,7 +11,8 @@ const CheckUtil := preload("res://tests/support/check_util.gd")
 const Scenario := preload("res://tests/support/scenario.gd")
 const SCENE := "res://tracks/quarry/quarry_drive.tscn"
 const LINE := "res://tracks/quarry/quarry_racing_line.tres"
-const MAX_TICKS := 120 * 170
+const MAX_TICKS := 120 * 260
+const LAPS := 3
 const SCRIPTED_REF := 63.95 ## s, scripted-driver flying lap (Track-Design wiki)
 
 var cu := CheckUtil.new()
@@ -61,7 +62,7 @@ func _lap_run(csv := "", skill := 0.0, scale := 0.0) -> Dictionary:
 	var max_centre := 0.0
 	var ticks := 0
 	var lt := drive.lap_timer
-	while lt.laps.size() < 2 and ticks < MAX_TICKS:
+	while lt.laps.size() < LAPS and ticks < MAX_TICKS:
 		await physics_frame
 		ticks += 1
 		var v: Vehicle = drive.vehicle
@@ -106,6 +107,7 @@ func _main() -> void:
 	var a := await _lap_run()
 	var b := await _lap_run()
 	for r in [warm, a]:
+		cu.check(r.laps.size() >= LAPS, "default AI completes %d consecutive laps (%d)" % [LAPS, r.laps.size()])
 		cu.check(r.laps.size() >= 2, "two consecutive laps completed (%d)" % r.laps.size())
 	cu.check(a.gates == 12, "track has 12 gates (%d)" % a.gates)
 	cu.check(a.out_of_order == 0 and warm.out_of_order == 0, "LapTimer accepted every gate in order (out-of-order crossings %d)" % a.out_of_order)
