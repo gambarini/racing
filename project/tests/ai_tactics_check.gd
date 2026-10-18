@@ -54,6 +54,8 @@ class Rig extends Node:
 	var trace_s := PackedFloat32Array()  ## car 0 line s per tick (record_trace)
 	var trace_v := PackedFloat32Array()
 	var record_trace := false
+	var grass := PackedInt32Array()  ## ticks per car with a grounded wheel on grass
+	var max_centre := PackedFloat32Array()  ## max |distance from the centre line| per car (m)
 
 	func _physics_process(_delta: float) -> void:
 		for i in vehicles.size():
@@ -80,6 +82,15 @@ class Rig extends Node:
 			if lock_inputs:
 				mgr.gate_input(st)
 			vehicles[i].apply_input(st)
+		for i in vehicles.size():
+			if grass.size() <= i:
+				grass.append(0)
+				max_centre.append(0.0)
+			max_centre[i] = maxf(max_centre[i], absf(mgr.lateral[i]))
+			for w in vehicles[i].wheels:
+				if w.is_grounded and w.surface_id == &"grass":
+					grass[i] += 1
+					break
 		_metrics()
 		ticks += 1
 
@@ -300,7 +311,7 @@ func _overtake(max_laps := 2) -> Dictionary:
 		if done >= 0 and t > done + 120 * 4:
 			break
 	var out := {"done": done, "contacts": rig.contacts, "clear": rig.min_clear, "p0": rig.vehicles[0].global_position,
-			"p1": rig.vehicles[1].global_position, "ticks": rig.ticks, "lead": rig.travelled[1] - rig.travelled[0] + 15.0,
+			"p1": rig.vehicles[1].global_position, "ticks": rig.ticks, "grass": Array(rig.grass), "max_centre": Array(rig.max_centre), "lead": rig.travelled[1] - rig.travelled[0] + 15.0,
 			"start_gap": start_gap}
 	await _finish_rig(rig)
 	return out
@@ -356,7 +367,8 @@ func _joker_race(seed_value: int, cars := 2, laps := 4) -> Dictionary:
 		t += 1
 	var out := {"state": mgr.state, "ticks": t, "joker_lap": Array(mgr.joker_lap), "taken": Array(mgr.joker_taken),
 			"crossings": [], "contacts": rig.contacts, "ledger": mgr.ledger.size(), "pref": [], "forced": [], "clear": [],
-			"end": [], "results": results.size()}
+			"end": [], "results": results.size(), "grass": Array(rig.grass), "max_centre": Array(rig.max_centre),
+			"laps": [], "order": Array(mgr.order)}
 	for i in cars:
 		out.crossings.append(mgr.timers[i].joker_crossings)
 		var tc: AiTactics = rig.drivers[i].tactics
@@ -364,6 +376,10 @@ func _joker_race(seed_value: int, cars := 2, laps := 4) -> Dictionary:
 		out.forced.append(tc.chosen_forced)
 		out.clear.append(tc.chosen_clear)
 		out.end.append(rig.vehicles[i].global_position)
+		var lt: Array = []
+		for rec in mgr.timers[i].laps:
+			lt.append(rec["ticks"])
+		out.laps.append(lt)
 	await _finish_rig(rig)
 	return out
 
@@ -385,6 +401,8 @@ func _main() -> void:
 	var ov := await _overtake()
 	print("INFO: overtake: ", ov)
 	cu.check(ov.done >= 0, "overtake: AI ahead of the slow car by >= 5 m within 2 laps (tick %d, %.1f s)" % [ov.done, ov.done * DT])
+	print("INFO: overtake off-road: grass ticks ", ov.grass, " max centre ", ov.max_centre)
+	cu.check(ov.grass[0] == 0, "overtake: no grass ticks while passing (%d; max centre offset %.2f m, road half-width 6.5 m)" % [ov.grass[0], ov.max_centre[0]])
 	cu.check_range("overtake: contact incidents", float(ov.contacts), 0.0, 1.0)
 
 	var solo := await _defend(false)
@@ -414,7 +432,9 @@ func _main() -> void:
 	var j2 := await _joker_race(7)
 	cu.check(j1.joker_lap == j2.joker_lap and j1.pref == j2.pref and j1.ticks == j2.ticks,
 			"joker: same seed repeats the joker laps %s / %s, preferred laps %s and race ticks %d / %d" % [str(j1.joker_lap), str(j2.joker_lap), str(j1.pref), j1.ticks, j2.ticks])
-	print("INFO: joker end positions equal across runs: ", j1.end == j2.end)
+	cu.check(j1.laps == j2.laps and j1.order == j2.order and j1.end == j2.end,
+			"joker: identical lap ticks %s, finishing order %s and end positions across two seed-7 runs" % [str(j1.laps), str(j1.order)])
+	print("INFO: joker race off-road: grass ticks ", j1.grass, " max centre offsets ", j1.max_centre)
 	for i in 5:
 		await process_frame
 	cu.finish(self)

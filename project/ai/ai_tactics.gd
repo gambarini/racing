@@ -41,6 +41,7 @@ var straight_look := 60.0
 var joker_clear_s := 1.5
 var joker_lead := 120.0 ## m before the detour entry where the joker choice is made
 var overtake_gap_s := 1.5 ## start a pass within this time gap (straights)
+var pass_patience := 1.0 ## s without closing before a pass is abandoned
 var overtake_ttc := 6.0 ## s: ...and when the bumper gap closes within this time at the current closing speed
 var min_closing := 1.0 ## m/s of closing speed that justifies a pass
 var obstacle_speed_ratio := 0.5 ## ahead slower than this fraction of own speed = obstacle: avoid anywhere
@@ -62,6 +63,7 @@ var chosen_forced := false ## the joker was taken because it was the last lap
 var chosen_clear := false ## no car within joker_clear_s at the choice
 
 var _pass_side := 0
+var _no_close_t := 0.0
 var _defend_side := 0
 var _defended := false
 var _decided := false
@@ -138,7 +140,20 @@ func update(drv: AiDriver) -> void:
 ## slower one while on a straight within `overtake_gap_s`. -1 = none (the driver follows instead).
 func _target_car(line: RacingLine, s: float) -> int:
 	if passing >= 0 and not mgr.retired[passing]:
-		if mgr.rel_s(car, passing) > -release_behind:
+		var rs := mgr.rel_s(car, passing)
+		if rs > -release_behind:
+			# Abort a non-obstacle pass that is not working: target out of range, or not being
+			# caught for `pass_patience` s while still behind it, or the straight is over.
+			var v_p := mgr.speeds_now[passing]
+			var obstacle_p := v_p < obstacle_speed_ratio * prox.own_speed
+			var closing_p := prox.own_speed - v_p
+			if rs > 0.0 and not obstacle_p:
+				_no_close_t = _no_close_t + 1.0 / 120.0 if closing_p < min_closing else 0.0
+				if rs > detect_range or _no_close_t > pass_patience or not in_straight:
+					_no_close_t = 0.0
+					return _abort_pass()
+			else:
+				_no_close_t = 0.0
 			return passing
 	following = -1
 	if prox.ahead >= 0:
@@ -151,6 +166,13 @@ func _target_car(line: RacingLine, s: float) -> int:
 					and (prox.ahead_gap - car_length) < overtake_ttc * closing):
 				return prox.ahead
 			following = prox.ahead
+	return -1
+
+
+func _abort_pass() -> int:
+	passing = -1
+	_pass_side = 0
+	following = -1
 	return -1
 
 

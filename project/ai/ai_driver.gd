@@ -150,8 +150,9 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	# Lane offset: rate-limited toward the target, clamped to the road minus the car margin.
 	var c_look := line.lane_offset_at(s + ld)
 	var half := road_half_at(s + ld)
-	_lane_lo = -half + car_margin - c_look
-	_lane_hi = half - car_margin - c_look
+	# Limits always include 0: the plain line (no tactics) is never displaced by the clamp (#28 path).
+	_lane_lo = minf(-half + car_margin - c_look, 0.0)
+	_lane_hi = maxf(half - car_margin - c_look, 0.0)
 	lane_now = clampf(move_toward(lane_now, clampf(lane_target, _lane_lo, _lane_hi), lane_rate * dt), _lane_lo, _lane_hi)
 	if lane_now != 0.0:
 		var tg_l := line.tangent_at(s + ld)
