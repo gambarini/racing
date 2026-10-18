@@ -32,6 +32,7 @@ var powertrain: Powertrain
 var _exclude: Array[RID] = []
 var _g := 9.81
 var _surface_tires := {} ## surface id -> TireParams derived from _surface_base
+var _surface_src := {} ## surface id -> the SurfaceDefinition _surface_tires[id] was built from
 var _surface_base: TireParams
 
 
@@ -199,6 +200,7 @@ func step_wheels(delta: float) -> void:
 	if _surface_base != tire_params:
 		_surface_base = tire_params
 		_surface_tires.clear()
+		_surface_src.clear()
 	var pos := global_position
 	var com_world := pos + global_transform.basis * center_of_mass
 	var body_fwd := -global_transform.basis.z
@@ -295,9 +297,13 @@ func step_wheels(delta: float) -> void:
 func _tire_for(w: Wheel, surf: SurfaceDefinition) -> TireParams:
 	if surf == w.blend_def:
 		return TireParams.for_surface_into(tire_params, surf, w.blend_tire)
-	if not _surface_tires.has(surf):
-		_surface_tires[surf] = TireParams.for_surface(tire_params, surf)
-	return _surface_tires[surf]
+	# Keyed by id and checked against the source object, so a registry hot-reload (new
+	# SurfaceDefinition instances) rebuilds the entry instead of serving stale params.
+	var sid := surf.id
+	if _surface_src.get(sid) != surf:
+		_surface_tires[sid] = TireParams.for_surface(tire_params, surf)
+		_surface_src[sid] = surf
+	return _surface_tires[sid]
 
 
 ## Rolling resistance and deformation drag (#12): a force against the contact-point velocity in

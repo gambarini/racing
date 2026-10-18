@@ -215,3 +215,14 @@ func test_particle_budget() -> void:
 		for em: GPUParticles3D in ems.values():
 			assert_lte(em.amount, SurfaceVfxMath.MAX_EFFECT_AMOUNT)
 	assert_eq(SurfaceVfxMath.MAX_LIVE_PARTICLES_PER_CAR, 4 * SurfaceVfxMath.MAX_EFFECT_AMOUNT)
+
+
+func test_wheel_surface_weights_empty_dict() -> void:
+	var w := Wheel.new()
+	w.surface_weights = {}
+	assert_eq(w.weight_count, 0)
+	assert_eq(w.surface_weights.size(), 0)
+	w.surface_weights = {&"gravel": 1.0}
+	assert_eq(w.weight_count, 1)
+	assert_eq(w.surface_weights[&"gravel"], 1.0)
+	w.free()
