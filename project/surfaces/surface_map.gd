@@ -10,16 +10,27 @@ const EPS := 1e-6
 
 @export var origin := Vector2.ZERO ## world XZ of the map's min corner, m
 @export var size := Vector2(100, 100) ## world XZ extent, m
-@export var ids: Array[StringName] = [] ## channel -> surface id (image 0: R,G,B,A, image 1: ...)
-@export var images: Array[Image] = [] ## RGBA8 splat images (all the same size)
+@export var ids: Array[StringName] = []: ## channel -> surface id (image 0: R,G,B,A, image 1: ...)
+	set(v):
+		ids = v
+		_cache_dirty = true
+@export var images: Array[Image] = []: ## RGBA8 splat images (all the same size)
+	set(v):
+		images = v
+		_cache_dirty = true
 
 # Cached weights, texel-major: _wt[(iz * _cw + ix) * _stride + k] = weight of ids[k] in [0, 1].
-# Built once on first `sample_into` (see `rebuild_cache`).
+# Built eagerly by `rebuild_cache()` (Quarry.build() calls it at track load, #159). Assigning `ids` or
+# `images` sets `_cache_dirty`; in-place edits (append, pixel writes, images[i] = x) need an explicit
+# `invalidate_cache()` / `rebuild_cache()`. `sample_into` only rebuilds when dirty (or the sizes moved).
 var _wt := PackedFloat32Array()
 var _cw := 0 ## cached image width
 var _ch := 0 ## cached image height
 var _stride := 0 ## cached channels per texel = min(ids.size(), 4 * images.size())
-var _cache_key := -1 ## images.size() * 64 + ids.size() the cache was built for
+var _cache_dirty := true ## set on ids/images assignment; cleared by rebuild_cache()
+var _built_ids := -1 ## ids.size() the cache was built for (guards in-place append/remove)
+var _built_images := -1 ## images.size() the cache was built for
+var cache_builds := 0 ## number of rebuild_cache() runs (tests / diagnostics)
 
 
 ## True when world (x, z) lies inside the map rectangle.
@@ -67,14 +78,22 @@ func sample(x: float, z: float) -> Dictionary:
 	return out
 
 
-## Rebuilds the weight cache used by `sample_into`. Called automatically the first time (and when
-## `images` or `ids` change size); call it yourself after editing pixels or swapping an image.
+## Marks the cache stale; the next `sample_into` rebuilds it. Use after in-place edits.
+func invalidate_cache() -> void:
+	_cache_dirty = true
+
+
+## Rebuilds the weight cache used by `sample_into`. Call it at load time to pre-warm (Quarry.build()
+## does); `sample_into` still rebuilds lazily if the cache is dirty. Call it after editing pixels.
 func rebuild_cache() -> void:
+	cache_builds += 1
+	_cache_dirty = false
 	_wt.clear()
 	_cw = 0
 	_ch = 0
 	_stride = mini(ids.size(), 4 * images.size())
-	_cache_key = images.size() * 64 + ids.size()
+	_built_ids = ids.size()
+	_built_images = images.size()
 	if images.is_empty():
 		return
 	_cw = images[0].get_width()
@@ -111,7 +130,7 @@ func sample_into(x: float, z: float, out: PackedFloat32Array) -> bool:
 		for k in nids:
 			out[k] = 0.0
 		return false
-	if _cache_key != images.size() * 64 + nids:
+	if _cache_dirty or _built_ids != nids or _built_images != images.size():
 		rebuild_cache()
 	var w0 := _cw
 	var h0 := _ch
