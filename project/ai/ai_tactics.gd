@@ -218,7 +218,7 @@ func _update_joker(drv: AiDriver) -> void:
 		return
 	if not _pref_ready:
 		var lo := mini(2, mgr.lap_count)
-		_pref_lap_init(lo, maxi(mgr.lap_count - 1, lo))
+		pick_joker_lap(lo, maxi(mgr.lap_count - 1, lo))
 	var entry := drv.line.joker_span_main.x
 	if drv.s < entry - joker_lead or drv.s >= entry:
 		return
@@ -232,6 +232,7 @@ func _update_joker(drv: AiDriver) -> void:
 		drv.set_variant(RacingLine.Variant.JOKER)
 
 
-func _pref_lap_init(lo: int, hi: int) -> void:
+## Draws the preferred joker lap in [lo, hi] from the seeded RNG (once per race).
+func pick_joker_lap(lo: int, hi: int) -> void:
 	joker_pref_lap = _rng.randi_range(lo, hi)
 	_pref_ready = true

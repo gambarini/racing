@@ -113,7 +113,7 @@ class Rig extends Node:
 			if t.in_straight:
 				if not _was_straight:
 					moves_per_straight.append(0)
-				elif absf(t.lane_target - _prev_target) > 0.3:
+				if absf(t.lane_target - _prev_target) > 0.3:
 					moves_per_straight[moves_per_straight.size() - 1] += 1
 					moves += 1
 			_was_straight = t.in_straight
@@ -191,7 +191,7 @@ func _make_ai(rig: Rig, tactics_car := -1, scale := 0.9, seed_value := 0) -> AiD
 	var ai := AiDriver.new()
 	ai.setup(rig.line)
 	ai.speed_scale = scale
-	if tactics_car >= 0 and OS.get_environment("NOTACT") == "":
+	if tactics_car >= 0:
 		ai.attach_tactics(rig.mgr, tactics_car, seed_value)
 	return ai
 
@@ -218,7 +218,7 @@ func _lane_offset() -> void:
 	var ai := _make_ai(rig)
 	_add_car(rig, _on_line(rig, S_LANE), ai)
 	_launch(rig.vehicles[0], v0)
-	ai.lane_target = float(OS.get_environment("LT")) if OS.get_environment("LT") != "" else 2.0
+	ai.lane_target = 2.0
 	var err_max := 0.0
 	var err_final := 0.0
 	var reached := -1.0
@@ -229,8 +229,6 @@ func _lane_offset() -> void:
 		if reached < 0.0 and absf(ai.lane_error) < 0.5 and t > 60:
 			reached = t * DT
 		err_final = ai.lane_error
-		if t % 60 == 0:
-			print("DBG t=%.1f s=%.1f v=%.1f lane_now=%.2f ct=%.2f err=%.2f steer=%.2f tgt=%.1f slip=%.1f y=%.2f" % [t * DT, ai.s, ai.speed_now, ai.lane_now, ai.cross_track, ai.lane_error, rig.states[0].steer, ai.target_speed, ai.rear_slip_deg, rig.vehicles[0].global_position.y])
 	cu.check_range("lane offset 2 m: steady-state |error| t=4..6 s (m)", err_max, 0.0, LANE_ERR_MAX)
 	cu.check_range("lane offset 2 m: final |error| (m)", absf(err_final), 0.0, 0.5)
 	cu.check_range("lane offset: max lane_now rate (m/s)", rig.max_lane_step, 0.0, 1.5 + 1e-3)
@@ -258,10 +256,10 @@ func _lane_offset() -> void:
 
 
 # --- 2. avoid ---------------------------------------------------------------------------------
-func _avoid(gap := 40.0) -> Dictionary:
+func _avoid(gap := 40.0, tactics := true) -> Dictionary:
 	var rig: Rig = await _make_rig()
 	var v0 := _line_speed(rig, S0)
-	var ai := _make_ai(rig, 0)
+	var ai := _make_ai(rig, 0 if tactics else -1)
 	_add_car(rig, _on_line(rig, S0), ai)
 	_add_car(rig, _on_line(rig, S0 + gap), null)
 	_launch(rig.vehicles[0], v0)
@@ -270,12 +268,12 @@ func _avoid(gap := 40.0) -> Dictionary:
 	for t in 120 * 8:
 		await physics_frame
 		min_v = minf(min_v, ai.speed_now)
-		if OS.get_environment("TRACE") != "" and t % 12 == 0:
-			print("TR t=%.2f v=%.1f cap=%.1f gap=%.1f lat=%.2f lane_t=%.2f lane_now=%.2f thr=%.2f brk=%.2f steer=%.2f tgt=%.1f ct=%.2f lo=%.2f yaw=%.1f" % [t * DT, ai.speed_now, ai.tactics.speed_cap, rig.mgr.rel_s(0, 1), rig.mgr.lateral[0], ai.lane_target, ai.lane_now, rig.states[0].throttle, rig.states[0].brake, rig.states[0].steer, ai.target_speed, ai.cross_track, rig.line.lane_offset_at(ai.s), rad_to_deg(atan2(-rig.vehicles[0].global_transform.basis.z.x, -rig.vehicles[0].global_transform.basis.z.z))])
 		if passed < 0 and rig.mgr.rel_s(0, 1) < -10.0:
 			passed = t
 		if passed >= 0 and t > passed + 120:
 			break
+	if not tactics:
+		passed = 0
 	var out := {"clear": rig.min_clear, "contacts": rig.contacts, "passed": passed, "min_v": min_v, "v0": v0,
 			"max_lat": absf(rig.mgr.lateral[0])}
 	await _finish_rig(rig)
@@ -356,15 +354,6 @@ func _joker_race(seed_value: int, cars := 2, laps := 4) -> Dictionary:
 	while mgr.state != RaceManager.State.FINISHED and t < max_t:
 		await physics_frame
 		t += 1
-		if OS.get_environment("RT2") != "" and t % 30 == 0 and t > 2000 and t < 3300:
-			var d1: AiDriver = rig.drivers[1]
-			print("R2 t=%.1f s=%.0f v=%.1f lat=%.1f lane_t=%.2f lane_now=%.2f cap=%.1f pass=%d fol=%d def=%s straight=%s ahead=%d gap=%.0f ct=%.2f" % [t * DT, d1.s, d1.speed_now, mgr.lateral[1], d1.lane_target, d1.lane_now, d1.tactics.speed_cap, d1.tactics.passing, d1.tactics.following, d1.tactics.defending, d1.tactics.in_straight, d1.tactics.prox.ahead, d1.tactics.prox.ahead_gap, d1.cross_track])
-		if OS.get_environment("RACETRACE") != "" and t % 600 == 0:
-			var ln := "RT t=%d" % (t / 120)
-			for i in cars:
-				var d: AiDriver = rig.drivers[i]
-				ln += " | c%d s=%.0f v=%.1f lat=%.1f lap=%d jk=%d" % [i, d.s, d.speed_now, mgr.lateral[i], mgr.timers[i].laps.size(), d.line.variant]
-			print(ln)
 	var out := {"state": mgr.state, "ticks": t, "joker_lap": Array(mgr.joker_lap), "taken": Array(mgr.joker_taken),
 			"crossings": [], "contacts": rig.contacts, "ledger": mgr.ledger.size(), "pref": [], "forced": [], "clear": [],
 			"end": [], "results": results.size()}
@@ -381,11 +370,6 @@ func _joker_race(seed_value: int, cars := 2, laps := 4) -> Dictionary:
 
 func _main() -> void:
 	await physics_frame
-	if OS.get_environment("ONLY") == "joker":
-		var jj := await _joker_race(7)
-		print("INFO: joker only: ", jj)
-		quit()
-		return
 	await _lane_offset()
 
 	var av := await _avoid()
@@ -393,6 +377,10 @@ func _main() -> void:
 	cu.check(av.passed >= 0, "avoid: AI passes the parked car (tick %d)" % av.passed)
 	cu.check_range("avoid: min clearance (m)", av.clear, 0.5, 100.0)
 	cu.check(av.contacts == 0, "avoid: zero contacts (%d)" % av.contacts)
+
+	var av0 := await _avoid(40.0, false)
+	print("INFO: avoid negative control (no tactics): ", av0)
+	cu.check(av0.contacts > 0 or av0.clear < 0.5, "avoid control: the same scenario without tactics hits the parked car (clearance %.2f m)" % av0.clear)
 
 	var ov := await _overtake()
 	print("INFO: overtake: ", ov)
