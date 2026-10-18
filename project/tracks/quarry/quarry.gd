@@ -138,6 +138,7 @@ func build() -> void:
 	terrain.chunk_cells = 100
 	terrain.load_from_image(Image.create_from_data(N, N, false, Image.FORMAT_RF, heights.to_byte_array()), Vector2.ZERO)
 	terrain.surface_map = _build_surface_map()
+	terrain.surface_map.rebuild_cache() # pre-warm: no hitch in the first physics tick (#159)
 	add_child(terrain)
 	terrain.build_collider()
 	terrain.build_visual()
