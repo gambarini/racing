@@ -146,4 +146,3 @@ func test_wheel_buffers_match_dictionary_path() -> void:
 			assert_almost_eq(b.peak_mu_scale, a.peak_mu_scale, 1e-5)
 			assert_almost_eq(b.rolling_resistance, a.rolling_resistance, 1e-5)
 	assert_gte(n, 100, "sampled >= 100 points")
-
