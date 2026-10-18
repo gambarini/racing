@@ -47,8 +47,8 @@ func _run(cold: bool) -> Array:
 	rest.sort()
 	var med: float = rest[rest.size() / 2]
 	var rebuilds := sm.cache_builds - builds0
-	root.remove_child(drive)
-	drive.free()
+	drive.queue_free()
+	await physics_frame
 	return [first, med, rebuilds]
 
 
