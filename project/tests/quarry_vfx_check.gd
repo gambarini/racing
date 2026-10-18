@@ -16,6 +16,7 @@ const IDS: Array[StringName] = [&"tarmac", &"dirt", &"gravel", &"mud", &"grass"]
 const GRASS_S := 10.0
 const GRASS_OFFSET := 8.0
 const MAX_LAP_TICKS := 120 * 120
+const GHOST := "user://test_ghost_quarry_vfx.dat" ## never the player's user://ghost_best.dat (#153)
 
 var cu := CheckUtil.new()
 
@@ -29,6 +30,7 @@ func _spawn(remove := false) -> QuarryDrive:
 	d.get_node("Vehicle/VehicleAudio").free() # audio is not under test and holds streams at exit
 	if remove:
 		d.get_node("Vehicle/VehicleVfx").free()
+	d.get_node("TimeTrial").ghost_path = GHOST
 	root.add_child(d)
 	return d
 
@@ -199,6 +201,7 @@ func _main() -> void:
 	cu.check_range("peak tyre mark segments", float(withv.marks), 0.0, SurfaceVfxMath.MAX_MARK_SEGMENTS)
 	cu.check(withv.particles > 0.0, "the lap produced particles (%.1f)" % withv.particles)
 	cu.check_range("lap time with VFX minus without (s)", withv.time - bare.time, -0.0001, 0.0001)
+	DirAccess.remove_absolute(GHOST)
 	cu.finish(self)
 
 

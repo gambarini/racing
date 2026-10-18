@@ -11,14 +11,19 @@ extends SceneTree
 
 const CheckUtil := preload("res://tests/support/check_util.gd")
 const SCENE := "res://tracks/quarry/quarry_drive.tscn"
-const GHOST := "user://quarry_timetrial_check.dat"
+const GHOST := "user://test_ghost_quarry_timetrial.dat" ## never the player's user://ghost_best.dat (#153)
 const MAX_TICKS := 120 * 160
+const GHOST_MAX_DIST := 0.5 ## m, ghost vs car on a live replay of the saved best (#153; QA measured 0.30 m)
+const CONTROL_OFFSET := Vector3(1.0, 0.0, 0.0) ## negative control: ghost displaced by 1 m
+const CONTROL_SHIFT := 24 ## negative control: ghost 0.2 s (24 ticks at 120 Hz) out of time
 
 var cu := CheckUtil.new()
 var _finished: Array[Dictionary] = []
 var _tt: TimeTrial
 var _lt: LapTimer
 var _veh: Vehicle
+var _ghost_log: Array[Vector3] = [] ## live replay: ghost position per tick (lap 2 only)
+var _car_log: Array[Vector3] = []
 
 
 func _initialize() -> void:
@@ -31,8 +36,10 @@ func _on_finished(ticks: int, valid: bool, saved: bool) -> void:
 
 
 ## Drives until `laps` timer laps are done on `route`; `penalty` adds a reset penalty to each running lap.
-func _run(route: StringName, laps: int, penalty := false) -> Dictionary:
+func _run(route: StringName, laps: int, penalty := false, log_ghost := false) -> Dictionary:
 	_finished.clear()
+	_ghost_log.clear()
+	_car_log.clear()
 	var drive: QuarryDrive = (load(SCENE) as PackedScene).instantiate()
 	drive.get_node("Vehicle/VehicleAudio").free() # audio is not under test and holds streams at exit
 	drive.get_node("TimeTrial").ghost_path = GHOST
@@ -57,6 +64,10 @@ func _run(route: StringName, laps: int, penalty := false) -> Dictionary:
 		if penalty and _lt.running and not was_running:
 			_lt.add_penalty(1.0)
 		was_running = _lt.running
+		# Live replay of the saved best: log ghost and car on every tick of lap 2 (lap 1 starts from rest).
+		if log_ghost and _lt.running and _lt.laps.size() == 1 and _tt._replay_tick >= 0:
+			_ghost_log.append(_tt.ghost.global_position)
+			_car_log.append(_veh.global_position)
 	return {"drive": drive, "tt": _tt, "timer": _lt, "ticks": ticks, "finished": _finished.duplicate(),
 			"completed_at": completed_at}
 
@@ -70,6 +81,23 @@ func _dispose(d: QuarryDrive) -> void:
 
 func _bytes(path: String) -> PackedByteArray:
 	return FileAccess.get_file_as_bytes(path)
+
+
+## Worst ghost-to-car distance over the logged ticks; the ghost sample is taken `shift` ticks
+## late and displaced by `offset`. Returns {dist, tick} (tick = first one above GHOST_MAX_DIST, else the worst).
+func _worst_ghost_dist(offset := Vector3.ZERO, shift := 0) -> Dictionary:
+	var worst := 0.0
+	var worst_tick := -1
+	var first_bad := -1
+	for i in _car_log.size():
+		var g := _ghost_log[clampi(i + shift, 0, _ghost_log.size() - 1)] + offset
+		var d := g.distance_to(_car_log[i])
+		if d > worst:
+			worst = d
+			worst_tick = i
+		if d > GHOST_MAX_DIST and first_bad < 0:
+			first_bad = i
+	return {"dist": worst, "tick": first_bad if first_bad >= 0 else worst_tick}
 
 
 func _main() -> void:
@@ -133,6 +161,20 @@ func _main() -> void:
 	var bytes3 := _bytes(GHOST)
 	var best_ticks: int = best.ticks if best != null else 1 << 30
 	_dispose(r3.drive)
+	await physics_frame
+
+	# 5. Live replay of the saved best (#153): the ghost stays within 0.5 m of a car driving the same line.
+	var r5 := await _run(&"main", 2, false, true)
+	cu.check(_car_log.size() > 120 * 20, "live replay: lap-2 ticks logged (%d)" % _car_log.size())
+	var live := _worst_ghost_dist()
+	cu.check(live.dist <= GHOST_MAX_DIST,
+			"ghost-to-car <= %.1f m on every lap-2 tick: worst %.3f m at lap tick %d" % [GHOST_MAX_DIST, live.dist, live.tick])
+	var off := _worst_ghost_dist(CONTROL_OFFSET)
+	cu.check(off.dist > GHOST_MAX_DIST, "negative control: ghost offset 1 m fails the check (worst %.3f m at tick %d)" % [off.dist, off.tick])
+	var shifted := _worst_ghost_dist(Vector3.ZERO, CONTROL_SHIFT)
+	cu.check(shifted.dist > GHOST_MAX_DIST, "negative control: ghost 0.2 s out of time fails the check (worst %.3f m at tick %d)" % [shifted.dist, shifted.tick])
+	cu.check(r5.finished.size() == 2, "live replay run completed both laps")
+	_dispose(r5.drive)
 	await physics_frame
 
 	# 4. Slower valid lap does not overwrite the faster best.

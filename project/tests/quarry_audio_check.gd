@@ -22,6 +22,7 @@ const WIN := 6 ## ticks per 50 ms at 120 Hz
 const AUDIBLE_DB := -40.0 ## below this a loop is in its start/stop snap region
 const SKIP_TICKS := 120 * 6 ## standing-start launch excluded from the slip statistics
 const MAX_LAP_TICKS := 120 * 120
+const GHOST := "user://test_ghost_quarry_audio.dat" ## never the player's user://ghost_best.dat (#153)
 
 var cu := CheckUtil.new()
 
@@ -37,6 +38,7 @@ func _spawn(player: bool, remove := false) -> QuarryDrive:
 		a.free()
 	else:
 		a.is_player = player
+	d.get_node("TimeTrial").ghost_path = GHOST
 	root.add_child(d)
 	return d
 
@@ -284,6 +286,7 @@ func _main() -> void:
 	# real time, so give it a moment or the exit reports a leaked stream.
 	OS.delay_msec(500)
 	await physics_frame
+	DirAccess.remove_absolute(GHOST)
 	cu.finish(self)
 
 

@@ -17,6 +17,7 @@ const CheckUtil := preload("res://tests/support/check_util.gd")
 const SCENE := "res://tracks/quarry/quarry_drive.tscn"
 const SMOOTH := 8 ## rows (67 ms) of moving average applied to vert_g before thresholds
 const MAX_TICKS := 120 * 160
+const GHOST := "user://test_ghost_quarry_drive.dat" ## never the player's user://ghost_best.dat (#153)
 
 var cu := CheckUtil.new()
 
@@ -28,6 +29,7 @@ func _initialize() -> void:
 ## Two laps of `route` along `line`; returns the flying-lap record plus run statistics.
 func _run(route: StringName, line: StringName, csv: String) -> Dictionary:
 	var drive: QuarryDrive = (load(SCENE) as PackedScene).instantiate()
+	drive.get_node("TimeTrial").ghost_path = GHOST
 	root.add_child(drive)
 	await physics_frame
 	var q := drive.quarry
@@ -102,6 +104,7 @@ func _smooth(a: PackedFloat32Array) -> PackedFloat32Array:
 
 func _main() -> void:
 	await physics_frame
+	DirAccess.remove_absolute(GHOST) # every run starts without a ghost (#153)
 	var main := await _run(&"main", &"tarmac", "user://quarry_lap_main.csv")
 	var joker := await _run(&"joker", &"tarmac", "user://quarry_lap_joker.csv")
 	var inside := await _run(&"main", &"inside", "user://quarry_lap_inside.csv")
@@ -189,4 +192,5 @@ func _main() -> void:
 	cu.check(absf(s_max - comp_s) < 25.0, "the compression spike is within 25 m of the designed compression (s=%.0f vs %.0f)" % [s_max, comp_s])
 	cu.check(flat_rows > 30, "control: the flat start zone was sampled (%d rows)" % flat_rows)
 	cu.check(flat_hi < 0.5 and flat_lo > -0.3, "control: the flat start zone has no spike (%.2f .. %.2f g)" % [flat_lo, flat_hi])
+	DirAccess.remove_absolute(GHOST)
 	cu.finish(self)
