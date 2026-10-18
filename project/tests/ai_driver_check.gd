@@ -42,14 +42,18 @@ func _speed_hold() -> void:
 	cu.check_range("PI: final speed error (m/s)", absf(target - r.end_speed), 0.0, 1.0)
 
 
-func _lap_run(csv := "") -> Dictionary:
+func _lap_run(csv := "", skill := 0.0, scale := 0.0) -> Dictionary:
 	var drive: QuarryDrive = (load(SCENE) as PackedScene).instantiate()
 	drive.get_node("Vehicle/VehicleAudio").free()
 	drive.get_node("TimeTrial").ghost_path = "user://ai_driver_check.dat"
 	root.add_child(drive)
 	await physics_frame
 	var line: RacingLine = load(LINE)
+	if skill > 0.0:
+		line = _resolve_line(line, skill)
 	var ai := drive.start_ai(line, MAX_TICKS if csv != "" else 0)
+	if scale > 0.0:
+		ai.speed_scale = scale
 	ai.telemetry_enabled = csv != ""
 	var wrong := WrongWayDetector.new()
 	var wrong_ticks := 0
@@ -75,6 +79,22 @@ func _lap_run(csv := "") -> Dictionary:
 			"grass": drive.grass_ticks, "pos": drive.vehicle.global_position, "rows": ai.telemetry_rows}
 	drive.queue_free()
 	await physics_frame
+	return out
+
+
+## Copy of the main lap with target speeds re-solved at `skill` (#154: skill 1.0, speed_scale 1.0).
+func _resolve_line(src: RacingLine, skill: float) -> RacingLine:
+	var out := src.duplicate() as RacingLine
+	var n := src.count()
+	var ds := PackedFloat32Array()
+	ds.resize(n)
+	for i in n:
+		var a := src.pos[i]
+		var b := src.pos[(i + 1) % n]
+		ds[i] = Vector2(b.x - a.x, b.z - a.z).length()
+	var p := RacingLineParams.new()
+	p.skill_scale = skill
+	out.target_speed = RacingLineSolver.solve(src.curvature, ds, src.surface_mu, p)
 	return out
 
 
@@ -107,6 +127,13 @@ func _main() -> void:
 	for i in mini(la.size(), lb.size()):
 		same = same and la[i]["ticks"] == lb[i]["ticks"]
 	cu.check(same, "identical lap ticks across two runs")
+	# #154 (informational): skill 1.0 line at speed_scale 1.0. The AI/car combination leaves the road
+	# at this setting (see PR #154 notes), so this is reported, not asserted. AI_SKILL / AI_SCALE override.
+	if OS.get_environment("AI_SKILL") != "":
+		var fast := await _lap_run("", float(OS.get_environment("AI_SKILL")), float(OS.get_environment("AI_SCALE")))
+		print("INFO: skill %s scale %s: laps %d, max centre %.2f m, grass ticks %d" % [
+				OS.get_environment("AI_SKILL"), OS.get_environment("AI_SCALE"), fast.laps.size(), fast.max_centre, fast.grass])
 	for i in 5:
 		await process_frame
 	cu.finish(self)
+
