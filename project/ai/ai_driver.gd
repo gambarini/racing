@@ -14,6 +14,16 @@ extends RefCounted
 const COLS := ["tick", "s", "speed", "target_speed", "look_x", "look_z", "cross_track", "steer", "throttle", "brake", "rear_slip_deg"]
 
 var line: RacingLine
+## Lateral offset of the look-ahead target from the racing line (#29), metres, + = right. Set by
+## AiTactics (or a test); `lane_now` follows it at `lane_rate` and is clamped to the road.
+var lane_target := 0.0
+var lane_now := 0.0
+var lane_rate := 1.5 ## m/s (estimate, #29)
+var road_half := 6.5 ## m, road half-width (Quarry main route)
+var joker_road_half := 5.0 ## m, half-width of the joker detour
+var car_margin := 1.2 ## m kept between the car centre and the road edge (estimate, #29)
+var lane_error := 0.0 ## m, car minus offset line (+ = car right of it), at the car's own s
+var tactics: AiTactics ## null = plain line following
 ## Look-ahead distance = clamp(look_k * speed, look_min, look_max) metres (estimate, #28).
 var look_k := 0.6 ## s
 var look_min := 6.0
@@ -58,6 +68,8 @@ var telemetry_capacity := 0
 var _steer := 0.0
 var _i := 0.0
 var _have_s := false
+var _lane_lo := 0.0
+var _lane_hi := 0.0
 
 
 func setup(p_line: RacingLine, p_telemetry_capacity := 0) -> void:
@@ -68,7 +80,36 @@ func setup(p_line: RacingLine, p_telemetry_capacity := 0) -> void:
 	telemetry_rows = 0
 
 
+## Gives the driver its own copy of the line (its variant switches must not leak into other
+## drivers sharing the resource) and a tactics layer fed by `mgr`.
+func attach_tactics(mgr: RaceManager, car: int, seed_value := 0) -> AiTactics:
+	line = line.duplicate()
+	tactics = AiTactics.new()
+	tactics.setup(mgr, car, seed_value)
+	tactics.lane_rate = lane_rate
+	return tactics
+
+
+## Switches the line variant (main / joker lap). s is variant-local, so it is re-acquired.
+func set_variant(v: RacingLine.Variant) -> void:
+	if line.variant != v:
+		line.variant = v
+		_have_s = false
+
+
+## Road half-width (m) at arc length `at` of the active variant.
+func road_half_at(at: float) -> float:
+	if line.variant == RacingLine.Variant.JOKER:
+		var span := line.joker_span_joker
+		var w := fposmod(at, line.lap_length())
+		if w >= span.x and w <= span.y:
+			return joker_road_half
+	return road_half
+
+
 func reset() -> void:
+	lane_target = 0.0
+	lane_now = 0.0
 	_steer = 0.0
 	_i = 0.0
 	_have_s = false
@@ -98,10 +139,23 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	rear_slip_deg = slip_deg
 	speed_now = speed
 	var sp := maxf(speed, 0.0)
-	# --- Steering: pure pursuit ---
+	if tactics != null:
+		tactics.update(self)
+		lane_target = tactics.lane_target
+	# --- Steering: pure pursuit to the (laterally offset) look-ahead point ---
 	var ld := look_distance(sp)
 	var li := line.sample_index(s + ld)
 	look_point = line.point_at_index(li, line.sample_frac(li, s + ld))
+	# Lane offset: rate-limited toward the target, clamped to the road minus the car margin.
+	var c_look := line.lane_offset_at(s + ld)
+	var half := road_half_at(s + ld)
+	_lane_lo = -half + car_margin - c_look
+	_lane_hi = half - car_margin - c_look
+	lane_now = clampf(move_toward(lane_now, clampf(lane_target, _lane_lo, _lane_hi), lane_rate * dt), _lane_lo, _lane_hi)
+	if lane_now != 0.0:
+		var tg_l := line.tangent_at(s + ld)
+		look_point.x += -tg_l.z * lane_now
+		look_point.z += tg_l.x * lane_now
 	var dx := look_point.x - pos.x
 	var dz := look_point.z - pos.z
 	# car-frame: forward component and right component (right = fwd rotated -90 deg about Y)
@@ -130,6 +184,8 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	var li0 := line.sample_index(s)
 	target_speed = minf(line.target_speed_at_index(li2, line.sample_frac(li2, lead_s)),
 			line.target_speed_at_index(li0, line.sample_frac(li0, s))) * speed_scale
+	if tactics != null:
+		target_speed = minf(target_speed, tactics.speed_cap)
 	var t := speed_control(target_speed, sp, dt)
 	var thr := maxf(t, 0.0)
 	var brk := maxf(-t, 0.0)
@@ -147,6 +203,7 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	var p0 := line.point_at(s)
 	var tg := line.tangent_at(s)
 	cross_track = (p0.x - pos.x) * -tg.z + (p0.z - pos.z) * tg.x
+	lane_error = -cross_track - lane_now
 	if telemetry_enabled and telemetry_rows < telemetry_capacity:
 		var o := telemetry_rows * COLS.size()
 		telemetry[o] = tick
