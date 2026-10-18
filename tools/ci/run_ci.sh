@@ -47,6 +47,17 @@ run_step import "$GODOT" --headless --path project --import --quit
 run_step tests "$GODOT" --headless --path project -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
 for f in project/tests/*_check.gd project/tests/check_*.gd; do
   n="$(basename "$f" .gd)"
+  [ "$n" = "ai_lap_check" ] && continue  # run twice below (determinism)
   run_step "$n" "$GODOT" --headless --fixed-fps 120 --path project -s "res://tests/$n.gd"
 done
+# Headless AI lap test (#34): the whole test runs twice (two processes) and the lap CSVs must be
+# identical. CSVs land in $LOGDIR/ai_lap_1 and ai_lap_2 for archiving (~45 s each).
+for k in 1 2; do
+  AI_LAP_OUT="$LOGDIR/ai_lap_$k" run_step "ai_lap_check_$k" "$GODOT" --headless --fixed-fps 120 --path project -s res://tests/ai_lap_check.gd
+done
+if cmp -s "$LOGDIR/ai_lap_1/ai_lap_laps.csv" "$LOGDIR/ai_lap_2/ai_lap_laps.csv" && [ -s "$LOGDIR/ai_lap_1/ai_lap_laps.csv" ]; then
+  echo "PASS: ai_lap_check lap ticks identical across two runs"
+else
+  echo "STEP FAILED: ai_lap_check determinism (lap CSVs differ or missing)"; diff "$LOGDIR/ai_lap_1/ai_lap_laps.csv" "$LOGDIR/ai_lap_2/ai_lap_laps.csv" | head; rc=1
+fi
 exit $rc
