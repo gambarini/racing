@@ -136,3 +136,27 @@ func test_resource_roundtrip_keeps_data() -> void:
 	assert_eq(back.count(), line.count())
 	assert_almost_eq(back.target_speed_at(33.0), line.target_speed_at(33.0), 1e-4)
 	DirAccess.remove_absolute(path)
+
+
+func test_friction_ellipse_bounds_combined_load() -> void:
+	var n := 300
+	var ds := _ones(n, 2.0)
+	var kappa := _ones(n, 0.0)
+	for i in range(140, 170):
+		kappa[i] = 1.0 / 40.0
+	for skill in [1.0, 0.66]:
+		var p := _params(1.0, skill)
+		var v := RacingLineSolver.solve(kappa, ds, _ones(n), p)
+		for i in n:
+			var j := (i + 1) % n
+			var a_lat: float = v[i] * v[i] * kappa[i]
+			var a_long: float = (v[j] * v[j] - v[i] * v[i]) / (2.0 * ds[i])
+			assert_lte(sqrt(a_lat * a_lat + a_long * a_long) / (p.tire_mu * G), 1.02, "skill %.2f sample %d" % [skill, i])
+
+
+func test_long_budget_shrinks_to_zero_at_the_grip_limit() -> void:
+	var p := _params()
+	var kappa := 0.02
+	var v_lim := sqrt(p.tire_mu * G / kappa)
+	assert_almost_eq(RacingLineSolver.long_budget(5.0, v_lim, kappa, 1.0, p), 0.0, 1e-3)
+	assert_almost_eq(RacingLineSolver.long_budget(5.0, 0.0, kappa, 1.0, p), 5.0, 1e-6)

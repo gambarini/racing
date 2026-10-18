@@ -98,6 +98,7 @@ func _check_lap(q: Quarry, line: RacingLine, p: RacingLineParams, joker: bool) -
 		cu.check(gravel_ok, "gravel zone (s 700-1050) speed <= tarmac speed for equal curvature")
 	cu.check_range("%s braking above the limit (m/s^2)" % tag, brake_worst, -100.0, 0.01)
 	cu.check_range("%s acceleration above the limit (m/s^2)" % tag, accel_worst, -100.0, 0.01)
+	_check_friction_circle(tag, d)
 	var t := line.predicted_lap_time()
 	var vmin := INF
 	var vmax := 0.0
@@ -106,6 +107,69 @@ func _check_lap(q: Quarry, line: RacingLine, p: RacingLineParams, joker: bool) -
 		vmax = maxf(vmax, v)
 	print("INFO: %s target speed %.1f .. %.1f m/s, predicted lap %.2f s" % [tag, vmin, vmax, t])
 	cu.check_range("%s predicted lap time (s)" % tag, t, 55.0, 75.0)
+
+
+## Friction-circle budget (#154): re-solves the lap's own curvature / grip at skill 1.0 and 0.66 and
+## checks the combined load sqrt(a_lat^2 + a_long^2) / (mu g) <= 1.02 at every sample (estimate
+## tolerance), that the speed is continuous (no step beyond the brake / accel limit), and that
+## skill 0.66 stays within 3 % of the pre-#154 solver.
+func _check_friction_circle(tag: String, d: RacingLine) -> void:
+	var n := d.count()
+	var ds := PackedFloat32Array()
+	ds.resize(n)
+	for i in n:
+		var a := d.pos[i]
+		var b := d.pos[(i + 1) % n]
+		ds[i] = Vector2(b.x - a.x, b.z - a.z).length()
+	for skill in [1.0, 0.66]:
+		var p := RacingLineParams.new()
+		p.skill_scale = skill
+		var v := RacingLineSolver.solve(d.curvature, ds, d.surface_mu, p)
+		var worst := 0.0
+		var worst_step := 0.0
+		var sum := 0.0
+		for i in n:
+			var j := (i + 1) % n
+			var mug := p.mu(d.surface_mu[i]) * p.gravity
+			var a_lat := v[i] * v[i] * absf(d.curvature[i])
+			var a_long := (v[j] * v[j] - v[i] * v[i]) / (2.0 * maxf(ds[i], 1e-3))
+			var ratio := sqrt(a_lat * a_lat + a_long * a_long) / mug
+			worst = maxf(worst, ratio)
+			sum += ratio
+			worst_step = maxf(worst_step, maxf(-a_long - p.brake_limit(d.surface_mu[i]),
+					a_long - p.accel_limit(v[i], d.surface_mu[i])))
+		print("INFO: %s skill %.2f combined-load ratio max %.3f mean %.3f" % [tag, skill, worst, sum / n])
+		# A sample pinned at v_min by the driver floor can exceed the budget on its own (a_lat > mu g
+		# at skill 1.0 only where the curve is tighter than v_min allows): none on the Quarry.
+		cu.check_range("%s skill %.2f max combined-load ratio" % [tag, skill], worst, 0.0, 1.02)
+		cu.check_range("%s skill %.2f speed step beyond brake/accel limit (m/s^2)" % [tag, skill], worst_step, -100.0, 0.01)
+		if skill < 0.7:
+			var old := _legacy_solve(d.curvature, ds, d.surface_mu, p)
+			var worst_dev := 0.0
+			for i in n:
+				worst_dev = maxf(worst_dev, absf(v[i] - old[i]) / old[i])
+			print("INFO: %s skill 0.66 max deviation from pre-#154 solver %.2f %%" % [tag, worst_dev * 100.0])
+			cu.check_range("%s skill 0.66 deviation from the pre-#154 solver" % tag, worst_dev, 0.0, 0.03)
+
+
+## Pre-#154 solver (no friction ellipse), kept as the regression reference.
+func _legacy_solve(kappa: PackedFloat32Array, ds: PackedFloat32Array, mu_scale: PackedFloat32Array,
+		p: RacingLineParams) -> PackedFloat32Array:
+	var n := kappa.size()
+	var v := PackedFloat32Array()
+	v.resize(n)
+	for i in n:
+		v[i] = RacingLineSolver.corner_speed(kappa[i], mu_scale[i], p)
+	for _pass in 2:
+		for step in n:
+			var i := n - 1 - step
+			var j := (i + 1) % n
+			v[i] = minf(v[i], sqrt(v[j] * v[j] + 2.0 * p.brake_limit(mu_scale[i]) * ds[i]))
+	for _pass in 2:
+		for i in n:
+			var j := (i + 1) % n
+			v[j] = minf(v[j], sqrt(v[i] * v[i] + 2.0 * p.accel_limit(v[i], mu_scale[i]) * ds[i]))
+	return v
 
 
 func _check_joker(q: Quarry, line: RacingLine) -> void:

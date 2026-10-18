@@ -47,9 +47,36 @@ static func solve(kappa: PackedFloat32Array, ds: PackedFloat32Array, mu_scale: P
 		for step in n:
 			var i := n - 1 - step
 			var j := (i + 1) % n
-			v[i] = minf(v[i], sqrt(v[j] * v[j] + 2.0 * p.brake_limit(mu_scale[i]) * ds[i]))
+			v[i] = minf(v[i], _brake_entry_speed(v[i], v[j], kappa[i], ds[i], mu_scale[i], p))
 	for _pass in 2:
 		for i in n:
 			var j := (i + 1) % n
-			v[j] = minf(v[j], sqrt(v[i] * v[i] + 2.0 * p.accel_limit(v[i], mu_scale[i]) * ds[i]))
+			var a := long_budget(p.accel_limit(v[i], mu_scale[i]), v[i], kappa[i], mu_scale[i], p)
+			v[j] = minf(v[j], sqrt(v[i] * v[i] + 2.0 * a * ds[i]))
 	return v
+
+
+## Friction-ellipse budget (#154): the longitudinal accel/brake available (m/s^2) at speed `v` in
+## curvature `kappa` is `limit * sqrt(max(0, 1 - (v^2 |kappa| / (mu g))^2))`, so the combined
+## load sqrt(a_lat^2 + a_long^2) never exceeds mu * g (limit <= mu * g by construction).
+static func long_budget(limit: float, v: float, kappa: float, mu_scale: float, p: RacingLineParams) -> float:
+	var r := v * v * absf(kappa) / (p.mu(mu_scale) * p.gravity)
+	return limit * sqrt(maxf(0.0, 1.0 - r * r))
+
+
+## Highest entry speed x <= `cap` that can brake down to `v_next` over `ds` with the ellipse
+## budget evaluated at x itself (bisection; x - entry(x) is monotone increasing in x).
+static func _brake_entry_speed(cap: float, v_next: float, kappa: float, ds: float, mu_scale: float,
+		p: RacingLineParams) -> float:
+	var limit := p.brake_limit(mu_scale)
+	var hi := cap
+	if hi <= sqrt(v_next * v_next + 2.0 * long_budget(limit, hi, kappa, mu_scale, p) * ds):
+		return hi
+	var lo := minf(v_next, cap)
+	for _it in 20:
+		var mid := 0.5 * (lo + hi)
+		if mid <= sqrt(v_next * v_next + 2.0 * long_budget(limit, mid, kappa, mu_scale, p) * ds):
+			lo = mid
+		else:
+			hi = mid
+	return lo
