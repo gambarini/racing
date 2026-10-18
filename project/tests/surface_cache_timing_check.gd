@@ -21,6 +21,8 @@ func _initialize() -> void:
 ## Returns [first_tick_us, median_us, rebuilds_after_load].
 func _run(cold: bool) -> Array:
 	var drive: QuarryDrive = (load(SCENE) as PackedScene).instantiate()
+	# Audio is irrelevant here, and freed/quitting players leak AudioStreamPlayback at exit.
+	drive.get_node("Vehicle/VehicleAudio").free()
 	root.add_child(drive)
 	await physics_frame
 	var sm := drive.quarry.terrain.surface_map
