@@ -2,6 +2,7 @@
 ## RaceManager (standing start, countdown, lap timers) and returns lap times and incident counts.
 ## Tracks: "quarry" (QuarryDrive scene, shipped racing line) and "proving_ground" (the 30 m tarmac
 ## circle in the Proving Ground, a lap loop built here in code: TrackSpline + RacingLine, no assets).
+## The Proving Ground loop is a test-only stand-in until the real Proving Ground lap track exists.
 ## Sim only: no audio, camera or HUD. Run from a SceneTree script with --fixed-fps 120.
 extends RefCounted
 
@@ -15,7 +16,7 @@ const PG_RADIUS := 30.0
 const PG_HALF_WIDTH := 4.0 ## metadata/width = 8
 const PG_GATES := 8
 const PG_SPAWN_LIFT := 0.5
-const MAX_SECONDS := 260.0 ## per run safety cap (sim seconds)
+const MAX_SECONDS := 400.0 ## per run safety cap (sim seconds)
 
 var tree: SceneTree
 var trace := OS.get_environment("AI_TRACE") != ""

@@ -39,10 +39,11 @@ static func stats(times: Array) -> Dictionary:
 	return {"best": best, "mean": mean, "std": sqrt(ss / maxf(n, 1))}
 
 
-## Combos whose completion and incident gates are not asserted because of a known AI defect (follow-up
-## issue in the PR): the standing-start lap of the Quarry RWD car can leave the road (wrong-way, rejected
-## gates, off-track) depending on tiny launch differences. Counts are still printed and written to the
-## CSV, and flying laps (if any) must be in bounds. Remove the entry when the AI is fixed.
+## Strict XFAIL (design ruling on PR #180, tied to #178): only the incident gates (wrong-way, rejected
+## gates, off-track) of these combos are expected to fail. Quarry RWD lap 1 (standing start) leaves the
+## road today; #178 tracks the AI fix, #179 the in-process run drift. Everything else (completion, flying-lap
+## bounds, std-dev, CSV, determinism in run_ci.sh) stays enforced. When the gates pass, this check FAILS
+## until the entry is removed.
 const XFAIL := ["quarry/rwd"]
 
 
@@ -92,11 +93,12 @@ func _main() -> void:
 				r.contacts, r.resets, r.wall_ms / 1000.0])
 		csv_sum += "%s,%s,%d,%.4f,%.4f,%.4f,%.4f,%d,%d,%d,%d,%d,%.2f\n" % [parts[0], parts[1], times.size(), st.best, st.mean, st.std,
 				fl.std, r.wrong_way, r.rejected_gates, r.off_track, r.contacts, r.resets, r.wall_ms / 1000.0]
-		if not XFAIL.has(key):
-			cu.check(r.finished, "%s completes %d laps (%d)" % [key, laps, times.size()])
+		cu.check(r.finished, "%s completes %d laps (%d)" % [key, laps, times.size()])
 		if XFAIL.has(key):
-			print("KNOWN: %s incident gates not asserted (see XFAIL): wrong-way %d, rejected gates %d, off-track %d (limit %d)" % [
+			var clean: bool = r.wrong_way == 0 and r.rejected_gates == 0 and r.off_track <= off_max
+			print("XFAIL (#178) %s lap-1 incidents: wrong-way %d, rejected gates %d, off-track %d (limit %d)" % [
 					key, r.wrong_way, r.rejected_gates, r.off_track, off_max])
+			cu.check(not clean, "%s XFAIL gates unexpectedly pass: remove XFAIL (#178)" % key)
 		else:
 			cu.check(r.wrong_way == 0, "%s: zero wrong-way flags (%d)" % [key, r.wrong_way])
 			cu.check(r.rejected_gates == 0, "%s: zero rejected gates (%d)" % [key, r.rejected_gates])
@@ -105,7 +107,8 @@ func _main() -> void:
 			cu.check_range("%s flying-lap std-dev (s)" % key, fl.std, 0.0, MAX_STD)
 		if BOUNDS.has(key) and flying.size() >= 1:
 			var b: Vector2 = BOUNDS[key]
-			cu.check_range("%s best flying lap (s)" % key, fl.best, b.x, b.y)
+			for t: float in flying:
+				cu.check_range("%s flying lap (s)" % key, t, b.x, b.y)
 	var dir := OS.get_environment(OUT_DIR_ENV)
 	if dir == "":
 		dir = "user://"
