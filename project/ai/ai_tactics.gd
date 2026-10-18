@@ -34,11 +34,18 @@ var release_behind := 8.0 ## m a passed car must be behind before the pass side 
 var detect_range := 100.0 ## m
 var defend_range := 60.0 ## m behind
 var defend_gap_s := 1.0
+var defend_closing := 1.0 ## m/s the follower must be faster by (a faster follower)
 var defend_shift := 1.2 ## m, single lane move of a defender
 var straight_curv := 0.004 ## 1/m: |curvature| below this over `straight_look` counts as a straight
 var straight_look := 60.0
 var joker_clear_s := 1.5
 var joker_lead := 120.0 ## m before the detour entry where the joker choice is made
+var overtake_gap_s := 1.5 ## start a pass within this time gap (straights)
+var overtake_ttc := 6.0 ## s: ...and when the bumper gap closes within this time at the current closing speed
+var min_closing := 1.0 ## m/s of closing speed that justifies a pass
+var obstacle_speed_ratio := 0.5 ## ahead slower than this fraction of own speed = obstacle: avoid anywhere
+var follow_dist := 6.0 ## m bumper gap kept when following
+var follow_time := 1.5 ## s to close the remaining gap when following
 var lane_rate := 1.5 ## m/s, mirrors AiDriver.lane_rate (shift-time estimate)
 
 ## Outputs.
@@ -46,6 +53,7 @@ var lane_target := 0.0 ## m from the racing line
 var speed_cap := INF ## m/s
 var in_straight := false
 var passing := -1 ## car id being passed / avoided, -1 = none
+var following := -1 ## car id being followed (blocked, not passed), -1 = none
 var defending := false
 var joker_chosen := false ## the joker variant was picked for the current lap
 var lap_no := 0
@@ -118,20 +126,31 @@ func update(drv: AiDriver) -> void:
 	else:
 		passing = -1
 		_pass_side = 0
+		if following >= 0:
+			var bumper_f := prox.ahead_gap - car_length
+			speed_cap = prox.ahead_speed + maxf(bumper_f - follow_dist, 0.0) / follow_time
 		want = _defend(line, s, drv)
 	lane_target = want
 
 
 ## Car to avoid / pass: a committed car until it is `release_behind` behind, else the nearest car
-## ahead whose lateral position blocks this car's line. -1 = none.
+## ahead that blocks this car's line AND is worth passing: a (near-)stationary car anywhere, or a
+## slower one while on a straight within `overtake_gap_s`. -1 = none (the driver follows instead).
 func _target_car(line: RacingLine, s: float) -> int:
 	if passing >= 0 and not mgr.retired[passing]:
 		if mgr.rel_s(car, passing) > -release_behind:
 			return passing
+	following = -1
 	if prox.ahead >= 0:
 		var la := line.lane_offset_at(s + prox.ahead_gap)
 		if absf(prox.ahead_lat - la) < car_width + clear_margin:
-			return prox.ahead
+			var v_c := prox.ahead_speed
+			var obstacle := v_c < obstacle_speed_ratio * prox.own_speed
+			var closing := prox.own_speed - v_c
+			if obstacle or (in_straight and closing > min_closing and prox.ahead_gap_s < overtake_gap_s
+					and (prox.ahead_gap - car_length) < overtake_ttc * closing):
+				return prox.ahead
+			following = prox.ahead
 	return -1
 
 
@@ -154,7 +173,7 @@ func _defend(line: RacingLine, s: float, drv: AiDriver) -> float:
 		defending = false
 		return 0.0
 	if _defend_side == 0 and not _defended and prox.behind >= 0 and prox.behind_gap_s < defend_gap_s \
-			and prox.behind_speed > prox.own_speed:
+			and prox.behind_speed > prox.own_speed + defend_closing:
 		var diff := prox.behind_lat - prox.own_lat
 		if absf(diff) > 0.4:
 			_defend_side = 1 if diff > 0.0 else -1

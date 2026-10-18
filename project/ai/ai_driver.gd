@@ -23,6 +23,7 @@ var road_half := 6.5 ## m, road half-width (Quarry main route)
 var joker_road_half := 5.0 ## m, half-width of the joker detour
 var car_margin := 1.2 ## m kept between the car centre and the road edge (estimate, #29)
 var lane_error := 0.0 ## m, car minus offset line (+ = car right of it), at the car's own s
+var tactics_brake_slack := 2.0 ## m/s below the current speed a tactical speed cap may ask for
 var tactics: AiTactics ## null = plain line following
 ## Look-ahead distance = clamp(look_k * speed, look_min, look_max) metres (estimate, #28).
 var look_k := 0.6 ## s
@@ -185,7 +186,9 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	target_speed = minf(line.target_speed_at_index(li2, line.sample_frac(li2, lead_s)),
 			line.target_speed_at_index(li0, line.sample_frac(li0, s))) * speed_scale
 	if tactics != null:
-		target_speed = minf(target_speed, tactics.speed_cap)
+		# A tactical cap brakes progressively (never below speed - brake_slack), so the front wheels
+		# keep enough grip to steer around the car being avoided.
+		target_speed = minf(target_speed, maxf(tactics.speed_cap, sp - tactics_brake_slack))
 	var t := speed_control(target_speed, sp, dt)
 	var thr := maxf(t, 0.0)
 	var brk := maxf(-t, 0.0)
