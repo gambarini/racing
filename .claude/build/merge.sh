@@ -43,7 +43,20 @@ head_branch=$(gh pr view "$pr" -R "$repo" --json headRefName --jq .headRefName)
 
 # 3. Update the main checkout and the board.
 git -C "$main" fetch -q && git -C "$main" pull -q --ff-only origin "$base"
-"$root/.claude/build/board.sh" "$issue" done || echo "merge: board update failed for #$issue"
+# A PR that only says "Refs #n" (partial work) leaves the issue open: keep it on the board as
+# Todo instead of Done. GitHub closes "Closes #n" issues asynchronously, so poll briefly.
+istate=OPEN
+for _ in 1 2 3 4 5 6; do
+  istate=$(gh issue view "$issue" -R "$repo" --json state --jq .state 2>/dev/null || echo OPEN)
+  [[ "$istate" == "CLOSED" ]] && break
+  sleep 5
+done
+if [[ "$istate" == "CLOSED" ]]; then
+  "$root/.claude/build/board.sh" "$issue" done || echo "merge: board update failed for #$issue"
+else
+  "$root/.claude/build/board.sh" "$issue" todo || echo "merge: board update failed for #$issue"
+  echo "merge: #$issue is still OPEN after merging #$pr (partial / Refs): board set to Todo"
+fi
 
 # 4. Remove this item's agent worktrees and branches, then the PR's local branch.
 for a in "$@"; do

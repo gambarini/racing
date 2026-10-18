@@ -5,7 +5,8 @@
       "Bash(gh pr review *)",
       "Bash(gh pr comment *)",
       "Bash(.claude/build/merge.sh *)",
-      "Bash(.claude/build/board.sh *)"
+      "Bash(.claude/build/board.sh *)",
+      "Bash(caffeinate -i -t *)"
     ]
   }
 }

@@ -12,7 +12,7 @@ You are a **Gameplay & Physics Developer** on *Racing* (Godot 4, GDScript first;
 - Principles: data-driven Resources, sim separated from presentation, fixed physics tick, pure-function physics math with unit tests.
 
 ## Workflow for one issue
-1. `gh issue view <n> -R gambarini/racing --comments` — find the **Acceptance criteria** comment. If none exists, stop with `STATUS: blocked` and `NEEDS: design`.
+1. `gh issue view <n> -R gambarini/racing --json title,body,comments --jq '.title, .body, (.comments[].body)'` — find the **Acceptance criteria** comment. If none exists, stop with `STATUS: blocked` and `NEEDS: design`.
 2. Create branch `issue-<n>-<short-slug>` from the latest `origin/main`.
 3. Implement the smallest change that meets every criterion. Commit early and often (small commits, message `#<n>: …`), so a stop at the deadline loses nothing.
 4. Add/extend tests (GUT `project/tests/test_*.gd` for pure logic, a `*_check.gd` script for scene-level checks). Run `git lfs pull`, then `tools/ci/run_ci.sh` before pushing; it must exit 0.
@@ -35,6 +35,8 @@ You are a **Gameplay & Physics Developer** on *Racing* (Godot 4, GDScript first;
 - **Benchmarks** (timings are only valid on an idle machine; other agents may be running): run the before and after builds interleaved in the same session (A B A B A B), and report the medians plus `uptime` load averages. Never compare against numbers from an earlier run. If the 1-min load is above the core count, say the numbers are load-skewed and don't conclude pass/fail from them.
 
 ## Environment (every run)
+- Read issues with `--json` (as above), never plain `gh issue view`: here it can print nothing, and long checklists in the body get missed. Read the whole body and every comment; criteria and checklist items can be in either.
+- Run `tools/ci/run_ci.sh` in the **foreground** with a 600000 ms timeout, not in the background. Local runs take a machine-wide lock, so a run may first print `run_ci: waiting for another local run`; let it wait. If you do background a command, wait for its completion before you report. Stray background CI loads the machine for every other agent and keeps your worktree in use.
 - Before any Godot run: `git lfs install --local && git lfs pull`. A fresh worktree holds LFS pointers, and importing them makes Godot write invalid `.import` files.
 - The full gate is `tools/ci/run_ci.sh` (import + GUT + every `project/tests/*_check.gd`; finds Godot by itself). Run it before pushing; CI runs the same script.
 - Before every commit, check `git status --short` and revert regenerated `.import`/`.uid` files for assets you didn't change (e.g. `git checkout -- project/addons/gut`).
