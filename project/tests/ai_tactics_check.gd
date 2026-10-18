@@ -54,6 +54,7 @@ class Rig extends Node:
 	var trace_s := PackedFloat32Array()  ## car 0 line s per tick (record_trace)
 	var trace_v := PackedFloat32Array()
 	var record_trace := false
+	var pre_tick := Callable()
 	var grass := PackedInt32Array()  ## ticks per car with a grounded wheel on grass
 	var max_centre := PackedFloat32Array()  ## max |distance from the centre line| per car (m)
 
@@ -71,6 +72,8 @@ class Rig extends Node:
 				var dd := fposmod(ls - _last_s[i] + ll * 0.5, ll) - ll * 0.5
 				travelled[i] += dd
 				_last_s[i] = ls
+		if pre_tick.is_valid():
+			pre_tick.call()
 		for i in vehicles.size():
 			var st := states[i]
 			if drivers[i] != null:
@@ -344,37 +347,57 @@ func _defend(with_follower: bool) -> Dictionary:
 
 
 # --- 6. joker race ----------------------------------------------------------------------------
-func _joker_race(seed_value: int, cars := 2, laps := 4) -> Dictionary:
+func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := false, cars := 2, laps := 4) -> Dictionary:
 	var rig: Rig = await _make_rig(laps)
 	rig.lock_inputs = true
 	var mgr := rig.mgr
 	mgr.joker_required = true
 	for i in cars:
 		# slots 0 and 3 of a 6-car grid: a spread field; the second car is slower, so the gap opens
-		var slot := i * 3
-		var ai := _make_ai(rig, i, 0.9 - 0.06 * i, seed_value)
+		var slot := i * slot_step
+		var ai := _make_ai(rig, -1 if (shadow and i == 1) else i, 0.9 - scale_step * i, seed_value)
 		var xf := mgr.grid_transform(slot, 6)
 		xf.origin.y = rig.drive.quarry.terrain.height_at(xf.origin.x, xf.origin.z) + rig.drive.spawn_lift
 		_add_car(rig, xf, ai)
+	if shadow:
+		# Car 1 is a plain line follower held ~20 m (0.7 s) behind car 0 by trimming its speed scale.
+		var sh: AiDriver = rig.drivers[1]
+		rig.pre_tick = func() -> void:
+			sh.speed_scale = clampf(0.9 + 0.01 * (mgr.rel_s(1, 0) - 20.0), 0.6, 1.0)
 	await physics_frame
 	var results := []
 	mgr.race_finished.connect(func(r: Array) -> void: results.assign(r))
 	mgr.start_countdown()
 	var t := 0
+	var probe := Proximity.new()
+	var prev_s := PackedFloat32Array([0.0, 0.0])
+	var samples: Array = [{}, {}] ## per car: lap -> time gap (s) to the nearest car, from RaceManager, 120 m before the detour entry
+	var probe_s := rig.line.joker_span_main.x - 120.0
 	var max_t := 120 * 90 * laps
 	while mgr.state != RaceManager.State.FINISHED and t < max_t:
 		await physics_frame
 		t += 1
+		for i in cars:
+			var cs := mgr.line_s[i]
+			if prev_s[i] < probe_s and cs >= probe_s and mgr.state == RaceManager.State.RACING:
+				mgr.query(i, probe)
+				var g := INF
+				if probe.ahead >= 0:
+					g = minf(g, probe.ahead_gap_s)
+				if probe.behind >= 0:
+					g = minf(g, probe.behind_gap_s)
+				samples[i][mgr.timers[i].laps.size() + 1] = g
+			prev_s[i] = cs
 	var out := {"state": mgr.state, "ticks": t, "joker_lap": Array(mgr.joker_lap), "taken": Array(mgr.joker_taken),
 			"crossings": [], "contacts": rig.contacts, "ledger": mgr.ledger.size(), "pref": [], "forced": [], "clear": [],
 			"end": [], "results": results.size(), "grass": Array(rig.grass), "max_centre": Array(rig.max_centre),
-			"laps": [], "order": Array(mgr.order)}
+			"samples": samples, "laps": [], "order": Array(mgr.order)}
 	for i in cars:
 		out.crossings.append(mgr.timers[i].joker_crossings)
 		var tc: AiTactics = rig.drivers[i].tactics
-		out.pref.append(tc.joker_pref_lap)
-		out.forced.append(tc.chosen_forced)
-		out.clear.append(tc.chosen_clear)
+		out.pref.append(tc.joker_pref_lap if tc != null else -1)
+		out.forced.append(tc.chosen_forced if tc != null else false)
+		out.clear.append(tc.chosen_clear if tc != null else false)
 		out.end.append(rig.vehicles[i].global_position)
 		var lt: Array = []
 		for rec in mgr.timers[i].laps:
@@ -434,6 +457,19 @@ func _main() -> void:
 			"joker: same seed repeats the joker laps %s / %s, preferred laps %s and race ticks %d / %d" % [str(j1.joker_lap), str(j2.joker_lap), str(j1.pref), j1.ticks, j2.ticks])
 	cu.check(j1.laps == j2.laps and j1.order == j2.order and j1.end == j2.end,
 			"joker: identical lap ticks %s, finishing order %s and end positions across two seed-7 runs" % [str(j1.laps), str(j1.order)])
+	# Traffic case: two cars glued together (grid slots 0 and 1, equal pace) stay inside 1.5 s, so a
+	# car whose preferred lap has come must defer; verified from RaceManager gaps, not the tactic's flag.
+	var tr := await _joker_race(0, 1, 0.0, true)
+	print("INFO: joker traffic race: laps ", tr.joker_lap, " pref ", tr.pref, " gap samples ", tr.samples[0])
+	var jl: int = tr.joker_lap[0]
+	var busy: Array = []
+	for lap in tr.samples[0]:
+		if tr.samples[0][lap] <= 1.5:
+			busy.append(lap)
+	cu.check(tr.crossings[0] == 1 and jl > 0, "joker traffic: the AI takes the joker exactly once (crossings %d, lap %d)" % [tr.crossings[0], jl])
+	cu.check(busy.has(tr.pref[0]) , "joker traffic: a car was within 1.5 s (RaceManager gap) on the preferred lap %d (busy laps %s)" % [tr.pref[0], str(busy)])
+	cu.check(not busy.has(jl) or jl == 4, "joker traffic: the joker lap %d was clear by RaceManager gap, or forced on the last lap (busy %s)" % [jl, str(busy)])
+	cu.check(jl > tr.pref[0], "joker traffic: the joker was deferred past the preferred lap (took lap %d, preferred %d)" % [jl, tr.pref[0]])
 	print("INFO: joker race off-road: grass ticks ", j1.grass, " max centre offsets ", j1.max_centre)
 	for i in 5:
 		await process_frame
