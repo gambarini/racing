@@ -60,6 +60,8 @@ var rank_of := PackedInt32Array()  ## 1-based live position
 var order := PackedInt32Array()  ## car ids, leader first
 var total_s := PackedFloat64Array()  ## distance raced along the lap line (m), grid cars negative
 var speeds_now := PackedFloat32Array()
+var line_s := PackedFloat32Array()  ## #29: centre-line offset of each car (m)
+var lateral := PackedFloat32Array()  ## #29: signed distance from the centre line (m), + = right of travel
 
 var _key := PackedFloat64Array()
 var _cross_tick := PackedInt32Array()
@@ -109,6 +111,8 @@ func add_car(body: RigidBody3D = null, car_name := "") -> int:
 	order.append(id)
 	total_s.append(0.0)
 	speeds_now.append(0.0)
+	line_s.append(0.0)
+	lateral.append(0.0)
 	_key.append(0.0)
 	_cross_tick.append(0)
 	_last_laps.append(0)
@@ -199,6 +203,48 @@ func gap_ahead(car: int) -> float:
 	return maxf(total_s[ahead] - total_s[car], 0.0) / maxf(speeds_now[car], min_gap_speed)
 
 
+## Nearby-car query for the AI (#29). Fills `out` with the nearest car ahead (within `range_ahead`
+## m) and behind (within `range_behind` m) by wrapped centre-line distance, with their lateral
+## offsets and speeds. Retired cars are ignored. O(cars), allocation-free, no scene access.
+func query(car: int, out: Proximity, range_ahead := 120.0, range_behind := 80.0) -> void:
+	out.ahead = -1
+	out.behind = -1
+	out.own_lat = lateral[car]
+	out.own_speed = speeds_now[car]
+	var best_a := range_ahead
+	var best_b := range_behind
+	var half := _lap_len * 0.5
+	for j in timers.size():
+		if j == car or retired[j]:
+			continue
+		var d := fposmod(line_s[j] - line_s[car] + half, _lap_len) - half
+		if d >= 0.0:
+			if d < best_a:
+				best_a = d
+				out.ahead = j
+		elif -d < best_b:
+			best_b = -d
+			out.behind = j
+	if out.ahead >= 0:
+		var j := out.ahead
+		out.ahead_gap = best_a
+		out.ahead_gap_s = best_a / maxf(out.own_speed, min_gap_speed)
+		out.ahead_lat = lateral[j]
+		out.ahead_speed = speeds_now[j]
+	if out.behind >= 0:
+		var j := out.behind
+		out.behind_gap = best_b
+		out.behind_gap_s = best_b / maxf(speeds_now[j], min_gap_speed)
+		out.behind_lat = lateral[j]
+		out.behind_speed = speeds_now[j]
+
+
+## Signed centre-line distance (m) from `car` to `other`, + = `other` is ahead (wrapped to +/- half a lap).
+func rel_s(car: int, other: int) -> float:
+	var half := _lap_len * 0.5
+	return fposmod(line_s[other] - line_s[car] + half, _lap_len) - half
+
+
 func _physics_process(_delta: float) -> void:
 	for i in timers.size():
 		var b := bodies[i]
@@ -276,6 +322,10 @@ func _update_progress(positions: PackedVector3Array) -> void:
 		var g := maxi(t.last_gate_crossed, 0)
 		var laps := t.laps.size()
 		var s := track.nearest_offset(positions[i])
+		line_s[i] = s
+		var tf := track.forward_at(s)
+		var tp := track.position_at(s)
+		lateral[i] = (positions[i].x - tp.x) * -tf.z + (positions[i].z - tp.z) * tf.x
 		var d := snappedf(fposmod(s - track.gate_offsets[g] + half, _lap_len) - half, 0.01)  # cm: float noise must not decide ties
 		total_s[i] = laps * _lap_len + track.gate_offsets[g] + d
 		_key[i] = laps * 1.0e5 + g * 1.0e3 + d
