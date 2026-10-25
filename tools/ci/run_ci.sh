@@ -101,10 +101,30 @@ if command -v git-lfs >/dev/null 2>&1; then
 fi
 # Warm-up: on a fresh clone the first import emits spurious font/plugin ERRORs (resources are
 # imported while plugins already load them). Not gating; the second pass below is.
+if [ -z "${SKIP_IMPORT:-}" ]; then
 echo "::group::import-warmup"
 "$GODOT" --headless --path project --import --quit > "$LOGDIR/import-warmup.log" 2>&1 || true
 echo "::endgroup::"
 run_step import "$GODOT" --headless --path project --import --quit
+fi
+# GitHub CI (#194): the serial run exceeded the 10-min workflow timeout (the workflow file can't be
+# changed by the agent token), so run 3 shards as parallel processes on the 4-vCPU runner after the
+# single import. RUN_CI_SERIAL=1 or an explicit SHARD keeps the old serial behaviour.
+if [ -n "${CI:-}" ] && [ -z "${SHARD:-}" ] && [ -z "${RUN_CI_SERIAL:-}" ]; then
+  pids=()
+  for i in 0 1 2; do
+    SHARD="$i/3" SKIP_IMPORT=1 bash "$0" "$LOGDIR/shard$i" > "$LOGDIR/shard$i.out" 2>&1 &
+    pids+=($!)
+  done
+  for k in 0 1 2; do
+    wait "${pids[$k]}" || rc=1
+    echo "::group::shard $k output"; cat "$LOGDIR/shard$k.out"; echo "::endgroup::"
+  done
+  echo "== per-step wall time (s), slowest first =="; cat "$TIMES" "$LOGDIR"/shard*/step-times.txt | sort -rn | head -25
+  echo "total: $SECONDS s"
+  if [ "$rc" -eq 0 ]; then echo "RESULT OK"; else echo "RESULT FAILED"; fi
+  exit $rc
+fi
 run_step tests "$GODOT" --headless --path project -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
 for f in project/tests/*_check.gd project/tests/check_*.gd; do
   n="$(basename "$f" .gd)"
