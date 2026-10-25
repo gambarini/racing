@@ -28,6 +28,7 @@ const JOKER_REASON := &"joker_missed"
 const RESET_REASON := &"reset"
 const LIMITS_REASON := &"track_limits"
 const WHEEL_REACH := 3.5  ## m: car centre farther than this inside the road edge cannot have a wheel off
+const CONTACT_REASON := &"contact"
 const NEVER := -1
 const RANK_HYSTERESIS := 0.3  ## m a car must lead by before it takes the place
 
@@ -44,6 +45,10 @@ const RANK_HYSTERESIS := 0.3  ## m a car must lead by before it takes the place
 @export var finish_grace_seconds := 30.0  ## after the first finisher (estimate)
 @export var min_gap_speed := 5.0  ## m/s floor for the gap-to-car-ahead estimate
 
+@export var contact_params: ContactParams = preload("res://race/contact_params.tres")  ## #175 thresholds
+@export var contact_penalties_enabled := true
+
+var contacts: ContactTracker  ## #175 contact log + heuristic, created in setup()
 var track: TrackSpline
 var tick_dt := 1.0 / 120.0
 var state := State.IDLE
@@ -74,6 +79,8 @@ var limit_violations := PackedInt32Array()  ## #174: track-limit excursions per 
 var wheel_pos := PackedVector3Array()  ## #174: 4 world wheel positions per car with wheel_src
 var wheel_src: Array[bool] = []  ## the car's wheels_off is derived from wheel_pos / its Vehicle
 
+var _prev_vel := PackedVector3Array()  ## body mode: last tick's velocities for the contact estimator
+var _penalise_cb := Callable()
 var _limits: Array[TrackLimits] = []
 var _vehicles: Array[Vehicle] = []
 var _key := PackedFloat64Array()
@@ -96,6 +103,8 @@ func setup(p_track: TrackSpline, p_lap_count := 4, p_tick_dt := 1.0 / 120.0) -> 
 	lap_count = p_lap_count
 	tick_dt = p_tick_dt
 	_lap_len = track.length()
+	contacts = ContactTracker.new(contact_params, MAX_CARS, tick_dt)
+	_penalise_cb = _on_contact_penalty
 
 
 func car_count() -> int:
@@ -140,6 +149,7 @@ func add_car(body: RigidBody3D = null, car_name := "") -> int:
 	_ref_pos.append(Vector3.ZERO)
 	_ref_fwd.append(Vector3(0, 0, -1))
 	_pos_buf.append(Vector3.ZERO)
+	_prev_vel.append(Vector3.ZERO)
 	_spd_buf.append(0.0)
 	return id
 
@@ -201,6 +211,67 @@ func set_wheel_positions(car: int, a: Vector3, b: Vector3, c: Vector3, d: Vector
 	wheel_pos[car * 4 + 2] = c
 	wheel_pos[car * 4 + 3] = d
 	wheel_src[car] = true
+
+
+## Reports a car-car contact (#175). `normal` is the world contact normal pointing from the
+## attacker to the victim, `victim_forward` the victim's heading; the hit zone follows from them.
+## The attacker is the car whose velocity component along the normal toward the other is larger.
+## Ignored outside the race. Logged for every contact; judged for the penalty `window` s later.
+func report_contact(attacker: int, victim: int, impulse: float, rel_speed: float, normal: Vector3,
+		victim_forward: Vector3) -> void:
+	if state != State.RACING or contacts == null or attacker == victim:
+		return
+	var z := ContactTracker.zone_of(normal, victim_forward, contact_params.zone_cos)
+	contacts.report(tick, (tick - go_tick) * tick_dt, attacker, victim, impulse, rel_speed, z, total_s, rank_of)
+
+
+## Contact log as CSV (columns time_s,attacker,victim,impulse_ns,rel_speed_ms,zone).
+func contact_log_csv() -> String:
+	return contacts.to_csv() if contacts != null else ContactTracker.CSV_HEADER + "\n"
+
+
+func save_contact_log(path: String) -> Error:
+	return contacts.save_csv(path)
+
+
+func contact_count() -> int:
+	return contacts.count() if contacts != null else 0
+
+
+func _on_contact_penalty(car: int, seconds: float) -> void:
+	if contact_penalties_enabled and not retired[car]:
+		add_penalty(car, seconds, CONTACT_REASON)
+
+
+## Body mode contact estimator: two bodies within contact distance whose closing speed along the
+## centre line dropped by more than `body_min_closing` since the last tick collided; the impulse
+## is the reduced mass times the lost closing speed. Allocation-free O(pairs).
+func _detect_body_contacts() -> void:
+	var n := timers.size()
+	for i in n:
+		var a := bodies[i]
+		if a == null:
+			continue
+		for j in range(i + 1, n):
+			var b := bodies[j]
+			if b == null:
+				continue
+			var d := b.global_position - a.global_position
+			var dist := d.length()
+			if dist > contact_params.body_contact_distance or dist < 0.01:
+				continue
+			var nrm := d / dist
+			var va_before := _prev_vel[i].dot(nrm)
+			var vb_before := -_prev_vel[j].dot(nrm)
+			var closing_before := va_before + vb_before
+			var closing_now := a.linear_velocity.dot(nrm) - b.linear_velocity.dot(nrm)
+			if closing_before < contact_params.body_min_closing or closing_now >= closing_before - contact_params.body_min_closing:
+				continue
+			var imp := ContactTracker.estimate_impulse(a.mass, b.mass, closing_before, closing_now)
+			if va_before >= vb_before:
+				report_contact(i, j, imp, closing_before, nrm, -b.global_basis.z)
+			else:
+				report_contact(j, i, imp, closing_before, -nrm, -a.global_basis.z)
 
 
 func _on_timer_penalty(seconds: float, car: int) -> void:
@@ -287,6 +358,11 @@ func _physics_process(_delta: float) -> void:
 			continue
 		_pos_buf[i] = b.global_position
 		_spd_buf[i] = b.linear_velocity.length()
+	if state == State.RACING:
+		_detect_body_contacts()
+	for i in timers.size():
+		if bodies[i] != null:
+			_prev_vel[i] = bodies[i].linear_velocity
 	step(_pos_buf, _spd_buf)
 
 
@@ -309,6 +385,8 @@ func step(positions: PackedVector3Array, speeds: PackedFloat32Array) -> void:
 	if state == State.RACING:
 		if track_limits_enabled:
 			_step_limits()
+		if contact_penalties_enabled:
+			contacts.step(tick, speeds_now, total_s, rank_of, _penalise_cb)
 		_check_race_end()
 
 
