@@ -13,7 +13,10 @@ func _main() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	await process_frame
 	var terrain := HeightmapTerrain.new()
-	terrain.load_from_image(TerrainSource.make_image(1001, 1.0), Vector2.ZERO)
+	if terrain.load_from_image(TerrainSource.make_image(1001, 1.0), Vector2.ZERO) != OK:
+		push_error("terrain_bench: heightmap rejected")
+		quit(1)
+		return
 	root.add_child(terrain)
 	terrain.build_collider()
 	terrain.build_visual()

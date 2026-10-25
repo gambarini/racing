@@ -17,7 +17,6 @@ var body: StaticBody3D
 var _scratch := PackedFloat32Array() ## reusable weights buffer for dominant_surface_at
 
 
-## Build from an FORMAT_RF image (one pixel per sample, value = height in m).
 ## Silent size check used by `load_from_image`: OK, or ERR_INVALID_PARAMETER unless the image is
 ## square FORMAT_RF with n >= 2 and (n - 1) % mesh_step == 0 so visual chunks tile exactly.
 func validate_image(img: Image) -> Error:
@@ -29,6 +28,7 @@ func validate_image(img: Image) -> Error:
 	return OK
 
 
+## Build from an FORMAT_RF image (one pixel per sample, value = height in m).
 ## Returns OK, or ERR_INVALID_PARAMETER (with push_error, terrain left unchanged) when
 ## `validate_image` rejects the image.
 func load_from_image(img: Image, world_origin: Vector2) -> Error:
