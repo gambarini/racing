@@ -57,6 +57,22 @@ class Rig extends Node:
 	var pre_tick := Callable()
 	var grass := PackedInt32Array()  ## ticks per car with a grounded wheel on grass
 	var max_centre := PackedFloat32Array()  ## max |distance from the centre line| per car (m)
+	# pack metrics (#177), per car; enabled by `pack_metrics`
+	var pack_metrics := false
+	var stranded_t := PackedFloat32Array()  ## s of the current slow-and-off-road spell
+	var stranded_max := PackedFloat32Array()  ## longest slow-and-off-road spell (s)
+	var wrong_way: Array[WrongWayDetector] = []
+	var wrong_flags := PackedInt32Array()  ## wrong-way flag rising edges
+	var off_events := PackedInt32Array()  ## off-track excursions (a wheel past the road edge, 0.5 s debounce)
+	var _off_now := PackedByteArray()
+	var _off_clear := PackedInt32Array()
+	var pass_max_lat := PackedFloat32Array()  ## max |lateral| while the car is passing (tactics.passing >= 0)
+	var max_impact := 0.0  ## m/s: largest relative speed between two cars at the start of a contact
+	var pair_contacts := 0
+	var _pair_hit := PackedByteArray()
+	var follow_ticks := PackedInt32Array()
+	var contact_log: Array[String] = []
+	var pass_ticks := PackedInt32Array()
 
 	func _physics_process(_delta: float) -> void:
 		for i in vehicles.size():
@@ -95,7 +111,68 @@ class Rig extends Node:
 					grass[i] += 1
 					break
 		_metrics()
+		if pack_metrics:
+			_pack_metrics()
 		ticks += 1
+
+	func _pack_metrics() -> void:
+		var n := vehicles.size()
+		while stranded_t.size() < n:
+			stranded_t.append(0.0)
+			stranded_max.append(0.0)
+			wrong_way.append(WrongWayDetector.new(DT))
+			wrong_flags.append(0)
+			off_events.append(0)
+			_off_now.append(0)
+			_off_clear.append(0)
+			pass_max_lat.append(0.0)
+			follow_ticks.append(0)
+			pass_ticks.append(0)
+		for i in n:
+			var v := vehicles[i]
+			var any_off := false
+			for w in v.wheels:
+				if mgr.track.is_off_road(w.global_position):
+					any_off = true
+					break
+			if any_off:
+				_off_clear[i] = 0
+				if _off_now[i] == 0:
+					_off_now[i] = 1
+					off_events[i] += 1
+			elif _off_now[i] == 1:
+				_off_clear[i] += 1
+				if _off_clear[i] >= 60:
+					_off_now[i] = 0
+			if any_off and spd[i] < 2.0 and mgr.state == RaceManager.State.RACING:
+				stranded_t[i] += DT
+				stranded_max[i] = maxf(stranded_max[i], stranded_t[i])
+			else:
+				stranded_t[i] = 0.0
+			var was: bool = wrong_way[i].wrong_way
+			var tg := mgr.track.forward_at(mgr.line_s[i])
+			if wrong_way[i].step(v.linear_velocity, tg) and not was:
+				wrong_flags[i] += 1
+			var d := drivers[i]
+			if d != null and d.tactics != null:
+				if d.tactics.passing >= 0:
+					pass_max_lat[i] = maxf(pass_max_lat[i], absf(mgr.lateral[i]))
+					pass_ticks[i] += 1
+				if d.tactics.following >= 0:
+					follow_ticks[i] += 1
+		# car-car contact: relative speed at the first tick of each pair contact
+		var k := 0
+		for a in n:
+			for b in range(a + 1, n):
+				while _pair_hit.size() <= k:
+					_pair_hit.append(0)
+				var hit := clearance(vehicles[a], vehicles[b]) <= 0.0
+				if hit and _pair_hit[k] == 0:
+					pair_contacts += 1
+					contact_log.append("t=%d cars %d/%d s=%.0f rel %.2f lat %.1f/%.1f pass %d/%d" % [ticks, a, b, mgr.line_s[a], (vehicles[a].linear_velocity - vehicles[b].linear_velocity).length(), mgr.lateral[a], mgr.lateral[b], drivers[a].tactics.passing, drivers[b].tactics.passing])
+					max_impact = maxf(max_impact, (vehicles[a].linear_velocity - vehicles[b].linear_velocity).length())
+				_pair_hit[k] = 1 if hit else 0
+				k += 1
 
 	static func clearance(a: Vehicle, b: Vehicle) -> float:
 		var rel := a.global_transform.affine_inverse() * b.global_position
@@ -347,15 +424,18 @@ func _defend(with_follower: bool) -> Dictionary:
 
 
 # --- 6. joker race ----------------------------------------------------------------------------
-func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := false, cars := 2, laps := 4) -> Dictionary:
+func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := false, cars := 2, laps := 4, joker := true, tactics := true, metrics := false) -> Dictionary:
 	var rig: Rig = await _make_rig(laps)
 	rig.lock_inputs = true
+	rig.pack_metrics = metrics
 	var mgr := rig.mgr
-	mgr.joker_required = true
+	mgr.joker_required = joker
 	for i in cars:
 		# slots 0 and 3 of a 6-car grid: a spread field; the second car is slower, so the gap opens
 		var slot := i * slot_step
-		var ai := _make_ai(rig, -1 if (shadow and i == 1) else i, 0.9 - scale_step * i, seed_value)
+		var ai := _make_ai(rig, -1 if ((shadow and i == 1) or not tactics) else i, 0.9 - scale_step * i, seed_value)
+		if ai.tactics != null and not joker:
+			ai.tactics.use_joker = false
 		var xf := mgr.grid_transform(slot, 6)
 		xf.origin.y = rig.drive.quarry.terrain.height_at(xf.origin.x, xf.origin.z) + rig.drive.spawn_lift
 		_add_car(rig, xf, ai)
@@ -370,8 +450,12 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 	mgr.start_countdown()
 	var t := 0
 	var probe := Proximity.new()
-	var prev_s := PackedFloat32Array([0.0, 0.0])
-	var samples: Array = [{}, {}] ## per car: lap -> time gap (s) to the nearest car, from RaceManager, 120 m before the detour entry
+	var prev_s := PackedFloat32Array()
+	var samples: Array = []
+	for i in cars:
+		prev_s.append(0.0)
+		samples.append({})
+	# ## per car: lap -> time gap (s) to the nearest car, from RaceManager, 120 m before the detour entry
 	var probe_s := rig.line.joker_span_main.x - 120.0
 	var max_t := 120 * 90 * laps
 	while mgr.state != RaceManager.State.FINISHED and t < max_t:
@@ -392,6 +476,17 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 			"crossings": [], "contacts": rig.contacts, "ledger": mgr.ledger.size(), "pref": [], "forced": [], "clear": [],
 			"end": [], "results": results.size(), "grass": Array(rig.grass), "max_centre": Array(rig.max_centre),
 			"samples": samples, "laps": [], "order": Array(mgr.order)}
+	if metrics:
+		out["stranded"] = Array(rig.stranded_max)
+		out["wrong"] = Array(rig.wrong_flags)
+		out["off"] = Array(rig.off_events)
+		out["pass_lat"] = Array(rig.pass_max_lat)
+		out["pass_ticks"] = Array(rig.pass_ticks)
+		out["follow_ticks"] = Array(rig.follow_ticks)
+		out["impact"] = rig.max_impact
+		out["pair_contacts"] = rig.pair_contacts
+		out["contact_log"] = rig.contact_log
+		out["finished"] = Array(mgr.finish_ticks)
 	for i in cars:
 		out.crossings.append(mgr.timers[i].joker_crossings)
 		var tc: AiTactics = rig.drivers[i].tactics
@@ -407,8 +502,24 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 	return out
 
 
+## Debug filter: `-- pack` (user args) runs only the named sections; no args runs everything.
+func _want(section: String) -> bool:
+	var a := OS.get_cmdline_user_args()
+	return a.is_empty() or a.has(section) or (section == "base" and not a.has("pack"))
+
+
+func _pack_checks() -> void:
+	var pk := await _joker_race(5, 1, 0.0, false, 3, 3, false, true, true)
+	print("INFO: pack plain: ", pk)
+
+
 func _main() -> void:
 	await physics_frame
+	if _want("pack"):
+		await _pack_checks()
+	if not _want("base"):
+		cu.finish(self)
+		return
 	await _lane_offset()
 
 	var av := await _avoid()

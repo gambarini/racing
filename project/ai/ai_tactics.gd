@@ -47,6 +47,7 @@ var min_closing := 1.0 ## m/s of closing speed that justifies a pass
 var obstacle_speed_ratio := 0.5 ## ahead slower than this fraction of own speed = obstacle: avoid anywhere
 var follow_dist := 6.0 ## m bumper gap kept when following
 var follow_time := 1.5 ## s to close the remaining gap when following
+var use_joker := true ## false = never take the joker (tests: plain race on a track that has one)
 var lane_rate := 1.5 ## m/s, mirrors AiDriver.lane_rate (shift-time estimate)
 
 ## Outputs.
@@ -56,6 +57,7 @@ var in_straight := false
 var passing := -1 ## car id being passed / avoided, -1 = none
 var following := -1 ## car id being followed (blocked, not passed), -1 = none
 var defending := false
+var on_detour := false ## lateral offsets are from the joker detour centre line (this car is on the detour)
 var joker_chosen := false ## the joker variant was picked for the current lap
 var lap_no := 0
 var joker_pref_lap := 0
@@ -115,6 +117,7 @@ func update(drv: AiDriver) -> void:
 	var line := drv.line
 	var s := drv.s
 	mgr.query(car, prox, detect_range, defend_range)
+	_to_route_frame(drv)
 	in_straight = _straight_at(line, s)
 	_update_joker(drv)
 	speed_cap = INF
@@ -123,7 +126,7 @@ func update(drv: AiDriver) -> void:
 	var tc := _target_car(line, s)
 	if tc >= 0:
 		var gap := mgr.rel_s(car, tc)
-		var lat_c := mgr.lateral[tc]
+		var lat_c := prox.ahead_lat if tc == prox.ahead else _lat_of(tc)
 		var la := line.lane_offset_at(s + maxf(gap, 0.0))
 		if passing != tc:
 			passing = tc
@@ -151,6 +154,51 @@ func update(drv: AiDriver) -> void:
 			speed_cap = prox.ahead_speed + maxf(bumper_f - follow_dist, 0.0) / follow_time
 		want = _defend(line, s, drv)
 	lane_target = want
+
+
+## Lateral offsets are measured from the route this car is on (#177): the main centre line, or the
+## detour centre line while this car drives the joker variant inside the detour span, so cars on the
+## detour block each other (the lane offsets of the JOKER line are from the detour centre line too).
+## Rewrites own/ahead/behind `lat` in `prox`. Allocation-free (Vector3 temporaries only).
+func _to_route_frame(drv: AiDriver) -> void:
+	on_detour = false
+	var line := drv.line
+	var trk := mgr.track
+	if line.variant != RacingLine.Variant.JOKER or trk.joker_curve == null:
+		return
+	if drv.s < line.joker_span_joker.x or drv.s > line.joker_span_joker.y:
+		return
+	on_detour = true
+	prox.own_lat = _lat_of(car)
+	if prox.ahead >= 0:
+		prox.ahead_lat = _lat_of(prox.ahead)
+	if prox.behind >= 0:
+		prox.behind_lat = _lat_of(prox.behind)
+
+
+## Lateral offset of car `j` in the active route frame (see `_to_route_frame`).
+func _lat_of(j: int) -> float:
+	if not on_detour:
+		return mgr.lateral[j]
+	var trk := mgr.track
+	var s := mgr.line_s[j]
+	var tf := trk.forward_at(s)
+	var base := trk.position_at(s)
+	var lat := mgr.lateral[j]
+	var p := Vector3(base.x - tf.z * lat, 0.0, base.z + tf.x * lat)
+	var inv := trk.global_transform.affine_inverse()
+	var local := inv * p
+	var cur := trk.joker_curve
+	var off := cur.get_closest_offset(local)
+	var c := cur.sample_baked(off)
+	var c2 := cur.sample_baked(minf(off + 0.5, cur.get_baked_length()))
+	if off + 0.5 > cur.get_baked_length():
+		c2 = c
+		c = cur.sample_baked(maxf(off - 0.5, 0.0))
+	var t := trk.global_transform.basis * Vector3(c2.x - c.x, 0.0, c2.z - c.z)
+	var tl := maxf(sqrt(t.x * t.x + t.z * t.z), 1e-6)
+	var cw := trk.global_transform * cur.sample_baked(off)
+	return ((p.x - cw.x) * -t.z + (p.z - cw.z) * t.x) / tl
 
 
 ## Car to avoid / pass: a committed car until it is `release_behind` behind, else the nearest car
@@ -243,7 +291,7 @@ func _straight_at(line: RacingLine, s: float) -> bool:
 
 ## Joker choice: once per lap, `joker_lead` m before the detour entry (main-lap s space).
 func _update_joker(drv: AiDriver) -> void:
-	if not mgr.track.has_joker or not drv.line.has_joker() or mgr.state != RaceManager.State.RACING:
+	if not use_joker or not mgr.track.has_joker or not drv.line.has_joker() or mgr.state != RaceManager.State.RACING:
 		return
 	var laps_done := mgr.timers[car].laps.size()
 	if laps_done + 1 != lap_no:
