@@ -28,6 +28,26 @@ static func curvature(pos: PackedVector3Array, k: int) -> PackedFloat32Array:
 	return out
 
 
+## Copy of `src` (and its joker lap) with the target speeds re-solved at `skill` (the fraction of
+## the grip-limited corner speed). Geometry and surface data are shared; only target_speed differs.
+## Setup-time (allocates). `base` supplies the car/driver limits; its skill_scale is replaced.
+static func resolve_line(src: RacingLine, skill: float, base: RacingLineParams = null) -> RacingLine:
+	var p := RacingLineParams.new() if base == null else base.duplicate() as RacingLineParams
+	p.skill_scale = skill
+	var out := src.duplicate() as RacingLine
+	var n := src.s.size() # own arrays, whatever the variant
+	var ds := PackedFloat32Array()
+	ds.resize(n)
+	for i in n:
+		var a := src.pos[i]
+		var b := src.pos[(i + 1) % n]
+		ds[i] = Vector2(b.x - a.x, b.z - a.z).length()
+	out.target_speed = solve(src.curvature, ds, src.surface_mu, p)
+	if src.joker != null:
+		out.joker = resolve_line(src.joker, skill, base)
+	return out
+
+
 ## Corner-speed cap (m/s) for curvature `kappa` on a surface: no longitudinal passes applied.
 static func corner_speed(kappa: float, mu_scale: float, p: RacingLineParams) -> float:
 	var v := sqrt(p.mu(mu_scale) * p.gravity / maxf(absf(kappa), 1e-4)) * p.skill_scale

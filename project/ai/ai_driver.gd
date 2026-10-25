@@ -25,6 +25,11 @@ var car_margin := 1.2 ## m kept between the car centre and the road edge (estima
 var lane_error := 0.0 ## m, car minus offset line (+ = car right of it), at the car's own s
 var tactics_brake_slack := 2.0 ## m/s below the current speed a tactical speed cap may ask for
 var tactics: AiTactics ## null = plain line following
+## Personality (#30): null = the plain driver. The driver only READS it (skill, speed_scale, braking
+## bravery, consistency); it never changes a car parameter. Use `setup_personality()`.
+var personality: AiPersonality
+var mistakes := 0 ## mistakes (lifts) made so far, for tests
+var mistake_factor := 1.0 ## target-speed multiplier of the current mistake (1 = none)
 ## Look-ahead distance = clamp(look_k * speed, look_min, look_max) metres (estimate, #28).
 var look_k := 0.6 ## s
 var look_min := 6.0
@@ -72,6 +77,8 @@ var _i := 0.0
 var _have_s := false
 var _lane_lo := 0.0
 var _lane_hi := 0.0
+var _rng := RandomNumberGenerator.new()
+var _mistake_t := 0.0
 
 
 func setup(p_line: RacingLine, p_telemetry_capacity := 0) -> void:
@@ -82,6 +89,22 @@ func setup(p_line: RacingLine, p_telemetry_capacity := 0) -> void:
 	telemetry_rows = 0
 
 
+## Sets the driver up for a personality (#30): the racing line is re-solved at the personality's
+## effective skill (setup-time, allocates), speed_scale and the braking look-ahead come from its
+## traits, and the mistake generator is seeded from `seed_value`. Nothing on the car is touched.
+func setup_personality(base_line: RacingLine, p: AiPersonality, seed_value := 0, p_telemetry_capacity := 0) -> void:
+	personality = p
+	setup(RacingLineSolver.resolve_line(base_line, p.effective_skill()), p_telemetry_capacity)
+	speed_scale = p.speed_scale
+	lead_time = p.brake_lead_time()
+	_rng.seed = hash([seed_value, int(p.skill * 1000.0), int(p.consistency * 1000.0)])
+
+
+## Distance (m) before a target-speed drop at which braking starts to be asked for at `speed`.
+func brake_point_distance(speed: float) -> float:
+	return maxf(speed, 0.0) * lead_time
+
+
 ## Gives the driver its own copy of the line (its variant switches must not leak into other
 ## drivers sharing the resource) and a tactics layer fed by `mgr`.
 func attach_tactics(mgr: RaceManager, car: int, seed_value := 0) -> AiTactics:
@@ -89,6 +112,8 @@ func attach_tactics(mgr: RaceManager, car: int, seed_value := 0) -> AiTactics:
 	tactics = AiTactics.new()
 	tactics.setup(mgr, car, seed_value)
 	tactics.lane_rate = lane_rate
+	if personality != null:
+		tactics.apply_personality(personality)
 	return tactics
 
 
@@ -117,6 +142,9 @@ func reset() -> void:
 	_have_s = false
 	tick = 0
 	telemetry_rows = 0
+	_mistake_t = 0.0
+	mistake_factor = 1.0
+	mistakes = 0
 
 
 ## One physics tick. `v` is only read.
@@ -191,6 +219,8 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	var li0 := line.sample_index(s)
 	target_speed = minf(line.target_speed_at_index(li2, line.sample_frac(li2, lead_s)),
 			line.target_speed_at_index(li0, line.sample_frac(li0, s))) * speed_scale
+	if personality != null:
+		target_speed *= _mistake(dt)
 	if tactics != null:
 		# A tactical cap brakes progressively (never below speed - brake_slack), so the front wheels
 		# keep enough grip to steer around the car being avoided.
@@ -228,6 +258,23 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 		telemetry[o + 10] = slip_deg
 		telemetry_rows += 1
 	tick += 1
+
+
+## Mistake generator (#30): at `personality.mistake_rate()` per second the driver lifts, cutting the
+## target speed by a seeded depth for `mistake_duration`. Consistency 1 never draws. Returns the
+## target-speed multiplier. Allocation-free.
+func _mistake(dt: float) -> float:
+	if _mistake_t > 0.0:
+		_mistake_t -= dt
+		if _mistake_t <= 0.0:
+			mistake_factor = 1.0
+		return mistake_factor
+	var rate := personality.mistake_rate()
+	if rate > 0.0 and _rng.randf() < rate * dt:
+		_mistake_t = personality.mistake_duration
+		mistake_factor = 1.0 - personality.mistake_depth * _rng.randf_range(0.5, 1.0)
+		mistakes += 1
+	return mistake_factor
 
 
 ## Pure-pursuit look-ahead (m) at forward speed `speed` (m/s).

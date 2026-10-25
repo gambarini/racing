@@ -71,6 +71,24 @@ var _rng := RandomNumberGenerator.new()
 var _pref_ready := false
 
 
+## Personality (#30) -> tactical quantities. Documented: aggression sets the lateral clearance wanted
+## when passing (`clear_margin`, the minimum overtake gap) and the time gap a pass starts within;
+## contact tolerance sets the bumper gap kept when following. Values come from the resource.
+var personality: AiPersonality
+
+
+func apply_personality(p: AiPersonality) -> void:
+	personality = p
+	clear_margin = p.overtake_clearance()
+	overtake_gap_s = p.overtake_gap_s()
+	follow_dist = p.follow_distance()
+
+
+## Minimum lateral gap (m) wanted beside a car when overtaking.
+func min_overtake_gap() -> float:
+	return clear_margin
+
+
 func setup(p_mgr: RaceManager, p_car: int, p_seed := 0) -> void:
 	mgr = p_mgr
 	car = p_car
