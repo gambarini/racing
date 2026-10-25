@@ -7,6 +7,9 @@
 ##  4. Defend: a faster follower within 1 s; lane moves per straight, speed vs the solo target.
 ##  5. Determinism: the overtake scenario twice gives identical ticks, positions and contacts.
 ##  6. Joker: 4-lap race, 3 AI cars: each takes the joker exactly once; the choice is repeatable.
+##  7. Detour follow (#177): lead and follower both on the joker detour; the rear car must follow/pass.
+##  8-9. (#177) 3-car pack, 3 plain laps and 4 joker laps: finish, stranding, wrong-way, off-track, contact, grass.
+## Debug: append `-- pack` (only 7-9) or `-- base` (only 1-6) after the script path.
 ## Run: godot --headless --fixed-fps 120 --path project -s res://tests/ai_tactics_check.gd
 extends SceneTree
 
@@ -18,6 +21,8 @@ const HALF_W := 0.85 ## chassis_size.x / 2
 const HALF_L := 1.7 ## chassis_size.z / 2
 const S0 := 5.0 ## line s of the scenario start: the flat start/finish straight (line s 1658..1662.46+196)
 const LANE_ERR_MAX := 0.75 ## m (estimate 0.5; the controller's own weave on this stretch is measured below)
+const PASS_LAT_MAX := 5.5 ## m: Quarry road half-width 6.5 minus 1.0 (#177, estimate)
+const GRASS_BASE_TICKS := 12 ## grass ticks per car measured over 3 plain laps in #29 (the #177 baseline)
 const S_LANE := 1600.0 ## lane test start (wraps at the lap length 1662.46)
 
 var cu := CheckUtil.new()
@@ -57,6 +62,22 @@ class Rig extends Node:
 	var pre_tick := Callable()
 	var grass := PackedInt32Array()  ## ticks per car with a grounded wheel on grass
 	var max_centre := PackedFloat32Array()  ## max |distance from the centre line| per car (m)
+	# pack metrics (#177), per car; enabled by `pack_metrics`
+	var pack_metrics := false
+	var stranded_t := PackedFloat32Array()  ## s of the current slow-and-off-road spell
+	var stranded_max := PackedFloat32Array()  ## longest slow-and-off-road spell (s)
+	var wrong_way: Array[WrongWayDetector] = []
+	var wrong_flags := PackedInt32Array()  ## wrong-way flag rising edges
+	var off_events := PackedInt32Array()  ## off-track excursions (a wheel past the road edge, 0.5 s debounce)
+	var _off_now := PackedByteArray()
+	var _off_clear := PackedInt32Array()
+	var pass_max_lat := PackedFloat32Array()  ## max |lateral| while the car is passing (tactics.passing >= 0)
+	var max_impact := 0.0  ## m/s: largest relative speed between two cars at the start of a contact
+	var pair_contacts := 0
+	var _pair_hit := PackedByteArray()
+	var follow_ticks := PackedInt32Array()
+	var contact_log: Array[String] = []
+	var pass_ticks := PackedInt32Array()
 
 	func _physics_process(_delta: float) -> void:
 		for i in vehicles.size():
@@ -95,7 +116,71 @@ class Rig extends Node:
 					grass[i] += 1
 					break
 		_metrics()
+		if pack_metrics:
+			_pack_metrics()
 		ticks += 1
+
+	func _pack_metrics() -> void:
+		var n := vehicles.size()
+		while stranded_t.size() < n:
+			stranded_t.append(0.0)
+			stranded_max.append(0.0)
+			wrong_way.append(WrongWayDetector.new(DT))
+			wrong_flags.append(0)
+			off_events.append(0)
+			_off_now.append(0)
+			_off_clear.append(0)
+			pass_max_lat.append(0.0)
+			follow_ticks.append(0)
+			pass_ticks.append(0)
+		for i in n:
+			var v := vehicles[i]
+			var any_off := false
+			# Cheap gate: wheels can only be past the edge when the centre is within 1.5 m of it
+			# (or the car is on the detour, where |lateral| exceeds the road half-width anyway).
+			if absf(mgr.lateral[i]) > mgr.track.road_half_at(mgr.line_s[i]) - 1.5:
+				for w in v.wheels:
+					if mgr.track.is_off_road(w.global_position):
+						any_off = true
+						break
+			if any_off:
+				_off_clear[i] = 0
+				if _off_now[i] == 0:
+					_off_now[i] = 1
+					off_events[i] += 1
+			elif _off_now[i] == 1:
+				_off_clear[i] += 1
+				if _off_clear[i] >= 60:
+					_off_now[i] = 0
+			if any_off and spd[i] < 2.0 and mgr.state == RaceManager.State.RACING:
+				stranded_t[i] += DT
+				stranded_max[i] = maxf(stranded_max[i], stranded_t[i])
+			else:
+				stranded_t[i] = 0.0
+			var was: bool = wrong_way[i].wrong_way
+			var tg := mgr.track.forward_at(mgr.line_s[i])
+			if wrong_way[i].step(v.linear_velocity, tg) and not was:
+				wrong_flags[i] += 1
+			var d := drivers[i]
+			if d != null and d.tactics != null:
+				if d.tactics.passing >= 0:
+					pass_max_lat[i] = maxf(pass_max_lat[i], absf(mgr.lateral[i]))
+					pass_ticks[i] += 1
+				if d.tactics.following >= 0:
+					follow_ticks[i] += 1
+		# car-car contact: relative speed at the first tick of each pair contact
+		var k := 0
+		for a in n:
+			for b in range(a + 1, n):
+				while _pair_hit.size() <= k:
+					_pair_hit.append(0)
+				var hit := clearance(vehicles[a], vehicles[b]) <= 0.0
+				if hit and _pair_hit[k] == 0:
+					pair_contacts += 1
+					contact_log.append("t=%d cars %d/%d s=%.0f rel %.2f lat %.1f/%.1f pass %d/%d" % [ticks, a, b, mgr.line_s[a], (vehicles[a].linear_velocity - vehicles[b].linear_velocity).length(), mgr.lateral[a], mgr.lateral[b], drivers[a].tactics.passing, drivers[b].tactics.passing])
+					max_impact = maxf(max_impact, (vehicles[a].linear_velocity - vehicles[b].linear_velocity).length())
+				_pair_hit[k] = 1 if hit else 0
+				k += 1
 
 	static func clearance(a: Vehicle, b: Vehicle) -> float:
 		var rel := a.global_transform.affine_inverse() * b.global_position
@@ -347,15 +432,18 @@ func _defend(with_follower: bool) -> Dictionary:
 
 
 # --- 6. joker race ----------------------------------------------------------------------------
-func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := false, cars := 2, laps := 4) -> Dictionary:
+func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := false, cars := 2, laps := 4, joker := true, tactics := true, metrics := false, plain_laps := 0) -> Dictionary:
 	var rig: Rig = await _make_rig(laps)
 	rig.lock_inputs = true
+	rig.pack_metrics = metrics
 	var mgr := rig.mgr
-	mgr.joker_required = true
+	mgr.joker_required = joker
 	for i in cars:
 		# slots 0 and 3 of a 6-car grid: a spread field; the second car is slower, so the gap opens
 		var slot := i * slot_step
-		var ai := _make_ai(rig, -1 if (shadow and i == 1) else i, 0.9 - scale_step * i, seed_value)
+		var ai := _make_ai(rig, -1 if ((shadow and i == 1) or not tactics) else i, 0.9 - scale_step * i, seed_value)
+		if ai.tactics != null and not joker:
+			ai.tactics.use_joker = false
 		var xf := mgr.grid_transform(slot, 6)
 		xf.origin.y = rig.drive.quarry.terrain.height_at(xf.origin.x, xf.origin.z) + rig.drive.spawn_lift
 		_add_car(rig, xf, ai)
@@ -370,13 +458,29 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 	mgr.start_countdown()
 	var t := 0
 	var probe := Proximity.new()
-	var prev_s := PackedFloat32Array([0.0, 0.0])
-	var samples: Array = [{}, {}] ## per car: lap -> time gap (s) to the nearest car, from RaceManager, 120 m before the detour entry
+	var prev_s := PackedFloat32Array()
+	var samples: Array = []
+	for i in cars:
+		prev_s.append(0.0)
+		samples.append({})
+	# ## per car: lap -> time gap (s) to the nearest car, from RaceManager, 120 m before the detour entry
 	var probe_s := rig.line.joker_span_main.x - 120.0
 	var max_t := 120 * 90 * laps
+	var snap := {}
 	while mgr.state != RaceManager.State.FINISHED and t < max_t:
 		await physics_frame
 		t += 1
+		if metrics and snap.is_empty() and plain_laps > 0:
+			var done_all := true
+			for i in cars:
+				done_all = done_all and mgr.timers[i].laps.size() >= plain_laps
+			if done_all:
+				snap = {"ticks": t, "taken": Array(mgr.joker_taken), "grass": Array(rig.grass), "stranded": Array(rig.stranded_max),
+						"wrong": Array(rig.wrong_flags), "off": Array(rig.off_events), "pass_lat": Array(rig.pass_max_lat),
+						"pass_ticks": Array(rig.pass_ticks), "follow_ticks": Array(rig.follow_ticks), "impact": rig.max_impact,
+						"pair_contacts": rig.pair_contacts, "laps": []}
+				for i in cars:
+					snap.laps.append(mgr.timers[i].laps.size())
 		for i in cars:
 			var cs := mgr.line_s[i]
 			if prev_s[i] < probe_s and cs >= probe_s and mgr.state == RaceManager.State.RACING:
@@ -392,6 +496,18 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 			"crossings": [], "contacts": rig.contacts, "ledger": mgr.ledger.size(), "pref": [], "forced": [], "clear": [],
 			"end": [], "results": results.size(), "grass": Array(rig.grass), "max_centre": Array(rig.max_centre),
 			"samples": samples, "laps": [], "order": Array(mgr.order)}
+	if metrics:
+		out["stranded"] = Array(rig.stranded_max)
+		out["wrong"] = Array(rig.wrong_flags)
+		out["off"] = Array(rig.off_events)
+		out["pass_lat"] = Array(rig.pass_max_lat)
+		out["pass_ticks"] = Array(rig.pass_ticks)
+		out["follow_ticks"] = Array(rig.follow_ticks)
+		out["impact"] = rig.max_impact
+		out["pair_contacts"] = rig.pair_contacts
+		out["plain"] = snap
+		out["contact_log"] = rig.contact_log
+		out["finished"] = Array(mgr.finish_ticks)
 	for i in cars:
 		out.crossings.append(mgr.timers[i].joker_crossings)
 		var tc: AiTactics = rig.drivers[i].tactics
@@ -407,8 +523,104 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 	return out
 
 
+## Debug filter: `-- pack` (user args) runs only the named sections; no args runs everything.
+func _want(section: String) -> bool:
+	var a := OS.get_cmdline_user_args()
+	return a.is_empty() or a.has(section) or (section == "base" and not a.has("pack"))
+
+
+## Lead (slow) and follower (fast) both on the joker detour: the follower must see the lead as
+## blocking (following or passing), measured while both are inside the detour span.
+func _detour_follow(route_frame: bool) -> Dictionary:
+	var rig: Rig = await _make_rig(3)
+	var jl: RacingLine = rig.line.joker
+	var span := rig.line.joker_span_joker
+	var lead := _make_ai(rig, 0, 0.6)
+	var fol := _make_ai(rig, 1, 0.9)
+	for ai in [lead, fol]:
+		ai.tactics.use_joker = false
+		ai.tactics.route_frame = route_frame
+		ai.set_variant(RacingLine.Variant.JOKER)
+	var s_lead := span.x + 45.0
+	var s_fol := span.x + 25.0
+	for k in 2:
+		var ss := s_lead if k == 0 else s_fol
+		var tg := jl.tangent_at(ss)
+		var p := jl.point_at(ss)
+		p.y = rig.drive.quarry.terrain.height_at(p.x, p.z)
+		_add_car(rig, Transform3D(Basis.looking_at(tg, Vector3.UP), p), lead if k == 0 else fol)
+	_launch(rig.vehicles[0], jl.target_speed_at(s_lead) * 0.6)
+	_launch(rig.vehicles[1], jl.target_speed_at(s_fol) * 0.9)
+	var ticks_both := 0
+	var blocked := 0
+	var max_det_lat := 0.0
+	for t in 120 * 12:
+		await physics_frame
+		if fol.s > span.y - 30.0 or lead.s > span.y - 5.0:
+			break
+		ticks_both += 1
+		if fol.tactics.following >= 0 or fol.tactics.passing >= 0:
+			blocked += 1
+		max_det_lat = maxf(max_det_lat, absf(fol.tactics.prox.own_lat))
+	var out := {"ticks": ticks_both, "blocked": blocked, "on_detour": fol.tactics.on_detour, "max_lat": max_det_lat,
+			"contacts": rig.contacts, "span": span}
+	await _finish_rig(rig)
+	return out
+
+
+func _pack_checks() -> void:
+	# --- 7. lead and follower both on the joker detour ---
+	var df1 := await _detour_follow(true)
+	var df0 := await _detour_follow(false)
+	print("INFO: detour follow (route-frame lateral): ", df1)
+	print("INFO: detour follow control (main-line lateral, pre-#177): ", df0)
+	cu.check(df1.ticks > 600, "detour follow: both cars stayed on the detour for %d ticks" % df1.ticks)
+	cu.check(df1.blocked >= df1.ticks - 10, "detour follow: the rear car follows or passes on the detour (%d of %d ticks)" % [df1.blocked, df1.ticks])
+	cu.check(df0.blocked < df0.ticks / 2, "detour follow control: with main-line lateral the rear car free-runs (%d of %d ticks blocked)" % [df0.blocked, df0.ticks])
+	cu.check(df1.contacts == 0, "detour follow: no contact between the cars (%d)" % df1.contacts)
+
+	# --- 8. three-car pack, Quarry, standing start (grid slots 0..2) ---
+	# One 4-lap race serves both: the joker is only taken on the forced last lap, so laps 1..3 are the
+	# plain race (snapshot when every car has finished lap 3; the leaders are up to ~5 s into lap 4 by then, asserted joker lap 4 for all); this halves the
+	# runtime of two separate races.
+	var jt := await _joker_race(5, 1, 0.0, false, 3, 4, true, true, true, 3)
+	var pk: Dictionary = jt.plain
+	print("INFO: pack plain (3 cars, first 3 laps of the 4-lap race): ", pk)
+	print("INFO: pack joker (3 cars, 4 laps): ", jt)
+	cu.check(jt.joker_lap.count(4) == 3, "pack: every car takes the joker on lap 4, so laps 1..3 are a plain race (joker laps %s)" % str(jt.joker_lap))
+	for i in 3:
+		cu.check(pk.laps[i] >= 3, "pack: car %d completes 3 laps (tick %d)" % [i, pk.ticks])
+		cu.check_range("pack: car %d longest stop (< 2 m/s) off the road (s, gate 5 s)" % i, pk.stranded[i], 0.0, 5.0)
+		cu.check(pk.wrong[i] == 0, "pack: car %d has no wrong-way flag (%d)" % [i, pk.wrong[i]])
+		cu.check_range("pack: car %d off-track events in 3 laps (gate 2)" % i, float(pk.off[i]), 0.0, 2.0)
+		cu.check_range("pack: car %d max |lateral| while passing (m; road half 6.5 - 1.0)" % i, pk.pass_lat[i], 0.0, PASS_LAT_MAX)
+	# #175's contact threshold (400 N*s) is not merged: no touch at all is the stricter reading.
+	cu.check(pk.pair_contacts == 0, "pack: no car-car contact in the plain race (%d contacts, peak closing speed %.2f m/s)" % [pk.pair_contacts, pk.impact])
+	cu.check(pk.pass_ticks[1] + pk.pass_ticks[2] + pk.follow_ticks[1] + pk.follow_ticks[2] > 0, "pack: tactics were active (pass ticks %s, follow ticks %s)" % [str(pk.pass_ticks), str(pk.follow_ticks)])
+
+	# --- 9. joker race: grass ticks per car next to the 3-lap plain baseline ---
+	var base_grass := 0
+	for g in pk.grass:
+		base_grass = maxi(base_grass, g)
+	var allowance := 2 * maxi(base_grass, GRASS_BASE_TICKS)
+	print("INFO: grass ticks per car: plain 3 laps %s, joker 4 laps %s (issue baseline %d); the detour surface is not grass, so any excess would be tactics" % [str(pk.grass), str(jt.grass), GRASS_BASE_TICKS])
+	cu.check(jt.state == RaceManager.State.FINISHED, "pack joker: race finished (%d ticks)" % jt.ticks)
+	for i in 3:
+		cu.check(jt.finished[i] != RaceManager.NEVER, "pack joker: car %d finishes (tick %d)" % [i, jt.finished[i]])
+		cu.check(jt.crossings[i] == 1, "pack joker: car %d takes the joker exactly once (%d)" % [i, jt.crossings[i]])
+		cu.check_range("pack joker: car %d grass ticks (2x the plain baseline)" % i, float(jt.grass[i]), 0.0, float(allowance))
+		cu.check_range("pack joker: car %d off-track events (gate 2)" % i, float(jt.off[i]), 0.0, 2.0)
+		cu.check(jt.wrong[i] == 0 and jt.stranded[i] <= 5.0, "pack joker: car %d not stranded (%.1f s) and no wrong-way flag (%d)" % [i, jt.stranded[i], jt.wrong[i]])
+	cu.check(jt.pair_contacts == 0, "pack joker: no car-car contact (%d)" % jt.pair_contacts)
+
+
 func _main() -> void:
 	await physics_frame
+	if _want("pack"):
+		await _pack_checks()
+	if not _want("base"):
+		cu.finish(self)
+		return
 	await _lane_offset()
 
 	var av := await _avoid()
@@ -425,6 +637,7 @@ func _main() -> void:
 	print("INFO: overtake: ", ov)
 	cu.check(ov.done >= 0, "overtake: AI ahead of the slow car by >= 5 m within 2 laps (tick %d, %.1f s)" % [ov.done, ov.done * DT])
 	print("INFO: overtake off-road: grass ticks ", ov.grass, " max centre ", ov.max_centre)
+	cu.check_range("overtake: max |lateral| during the pass (m; road half 6.5 - 1.0)", ov.max_centre[0], 0.0, PASS_LAT_MAX)
 	cu.check(ov.grass[0] == 0, "overtake: no grass ticks while passing (%d; max centre offset %.2f m, road half-width 6.5 m)" % [ov.grass[0], ov.max_centre[0]])
 	cu.check_range("overtake: contact incidents", float(ov.contacts), 0.0, 1.0)
 
