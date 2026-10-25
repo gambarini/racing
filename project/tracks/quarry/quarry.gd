@@ -308,6 +308,15 @@ func _build_track(xz: PackedVector2Array, ys: PackedFloat32Array) -> void:
 	track.joker_position = Vector3(joker_xz[mid].x, joker_ys[mid] + 0.05, joker_xz[mid].y)
 	track.joker_forward = Vector3(t.x, 0.0, t.y).normalized()
 	track.joker_half_width = JOKER_HALF + 0.5
+	# Track limits (#174): road edge incl. the widened first corner; the detour is legal ground.
+	track.road_half_width = ROAD_HALF
+	track.half_profile_step = 1.0
+	var prof := PackedFloat32Array()
+	for k in int(ceil(track_length)):
+		prof.append(road_half(float(k)))
+	track.half_profile = prof
+	track.joker_curve = joker_line
+	track.joker_road_half = JOKER_HALF
 	add_child(track)
 	_add_marker(&"JokerEntry", joker_xz[0], joker_ys[0], joker_xz[1] - joker_xz[0], JOKER_HALF + 3.0)
 	var last := joker_xz.size() - 1

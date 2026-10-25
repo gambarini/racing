@@ -15,6 +15,15 @@ extends Node3D
 @export var joker_position := Vector3.ZERO
 @export var joker_forward := Vector3(0, 0, -1)
 @export var joker_half_width := 4.0
+## Road edge for track limits (#174): half-width of the paved road about the centre line (m), 0 =
+## no limits. `half_profile` (optional) gives the half-width per `half_profile_step` m along the
+## closed line (linear, wrapped), for tracks with widened sections. `joker_curve` (optional) is the
+## centre line of the joker detour, legal ground out to `joker_road_half`.
+@export var road_half_width := 0.0
+@export var half_profile: PackedFloat32Array = PackedFloat32Array()
+@export var half_profile_step := 1.0
+@export var joker_curve: Curve3D
+@export var joker_road_half := 0.0
 @export var grid_slots := 8
 @export var grid_spacing := 8.0  ## along the line, behind the start line
 @export var grid_lateral := 2.5  ## +/- from the centre line, alternating
@@ -63,6 +72,39 @@ func forward_at(d: float) -> Vector3:
 	var q := centre_line.sample_baked(fposmod(o + 0.5, l))
 	var t := Vector3(q.x - p.x, 0.0, q.z - p.z).normalized()
 	return (global_transform.basis * t).normalized()
+
+
+## Road half-width (m) at distance `d` along the line. Allocation-free.
+func road_half_at(d: float) -> float:
+	var n := half_profile.size()
+	if n < 2:
+		return road_half_width
+	var u := fposmod(d, length()) / half_profile_step
+	var i := int(u)
+	return lerpf(half_profile[i % n], half_profile[(i + 1) % n], u - floorf(u))
+
+
+## True when world position `pos` (a wheel) lies beyond the road edge: horizontal distance to the
+## centre line above the half-width there, and not on the joker detour. Always false when
+## `road_half_width` is 0. Allocation-free.
+func is_off_road(pos: Vector3) -> bool:
+	if road_half_width <= 0.0:
+		return false
+	var s := nearest_offset(pos)
+	var c := position_at(s)
+	var dx := pos.x - c.x
+	var dz := pos.z - c.z
+	var h := road_half_at(s)
+	if dx * dx + dz * dz <= h * h:
+		return false
+	if joker_curve != null:
+		var local := global_transform.affine_inverse() * pos
+		var jc := global_transform * joker_curve.sample_baked(joker_curve.get_closest_offset(local))
+		dx = pos.x - jc.x
+		dz = pos.z - jc.z
+		if dx * dx + dz * dz <= joker_road_half * joker_road_half:
+			return false
+	return true
 
 
 ## Distance along the line of the point closest to world position `pos`.
