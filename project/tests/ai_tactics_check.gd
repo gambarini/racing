@@ -136,10 +136,13 @@ class Rig extends Node:
 		for i in n:
 			var v := vehicles[i]
 			var any_off := false
-			for w in v.wheels:
-				if mgr.track.is_off_road(w.global_position):
-					any_off = true
-					break
+			# Cheap gate: wheels can only be past the edge when the centre is within 1.5 m of it
+			# (or the car is on the detour, where |lateral| exceeds the road half-width anyway).
+			if absf(mgr.lateral[i]) > mgr.track.road_half_at(mgr.line_s[i]) - 1.5:
+				for w in v.wheels:
+					if mgr.track.is_off_road(w.global_position):
+						any_off = true
+						break
 			if any_off:
 				_off_clear[i] = 0
 				if _off_now[i] == 0:
@@ -429,7 +432,7 @@ func _defend(with_follower: bool) -> Dictionary:
 
 
 # --- 6. joker race ----------------------------------------------------------------------------
-func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := false, cars := 2, laps := 4, joker := true, tactics := true, metrics := false) -> Dictionary:
+func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := false, cars := 2, laps := 4, joker := true, tactics := true, metrics := false, plain_laps := 0) -> Dictionary:
 	var rig: Rig = await _make_rig(laps)
 	rig.lock_inputs = true
 	rig.pack_metrics = metrics
@@ -463,9 +466,21 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 	# ## per car: lap -> time gap (s) to the nearest car, from RaceManager, 120 m before the detour entry
 	var probe_s := rig.line.joker_span_main.x - 120.0
 	var max_t := 120 * 90 * laps
+	var snap := {}
 	while mgr.state != RaceManager.State.FINISHED and t < max_t:
 		await physics_frame
 		t += 1
+		if metrics and snap.is_empty() and plain_laps > 0:
+			var done_all := true
+			for i in cars:
+				done_all = done_all and mgr.timers[i].laps.size() >= plain_laps
+			if done_all:
+				snap = {"ticks": t, "taken": Array(mgr.joker_taken), "grass": Array(rig.grass), "stranded": Array(rig.stranded_max),
+						"wrong": Array(rig.wrong_flags), "off": Array(rig.off_events), "pass_lat": Array(rig.pass_max_lat),
+						"pass_ticks": Array(rig.pass_ticks), "follow_ticks": Array(rig.follow_ticks), "impact": rig.max_impact,
+						"pair_contacts": rig.pair_contacts, "laps": []}
+				for i in cars:
+					snap.laps.append(mgr.timers[i].laps.size())
 		for i in cars:
 			var cs := mgr.line_s[i]
 			if prev_s[i] < probe_s and cs >= probe_s and mgr.state == RaceManager.State.RACING:
@@ -490,6 +505,7 @@ func _joker_race(seed_value: int, slot_step := 3, scale_step := 0.06, shadow := 
 		out["follow_ticks"] = Array(rig.follow_ticks)
 		out["impact"] = rig.max_impact
 		out["pair_contacts"] = rig.pair_contacts
+		out["plain"] = snap
 		out["contact_log"] = rig.contact_log
 		out["finished"] = Array(mgr.finish_ticks)
 	for i in cars:
@@ -563,11 +579,17 @@ func _pack_checks() -> void:
 	cu.check(df0.blocked < df0.ticks / 2, "detour follow control: with main-line lateral the rear car free-runs (%d of %d ticks blocked)" % [df0.blocked, df0.ticks])
 	cu.check(df1.contacts == 0, "detour follow: no contact between the cars (%d)" % df1.contacts)
 
-	# --- 8. three-car pack, Quarry, standing start (grid slots 0..2), no joker ---
-	var pk := await _joker_race(5, 1, 0.0, false, 3, 3, false, true, true)
-	print("INFO: pack plain (3 cars, 3 laps): ", pk)
+	# --- 8. three-car pack, Quarry, standing start (grid slots 0..2) ---
+	# One 4-lap race serves both: the joker is only taken on the forced last lap, so laps 1..3 are the
+	# plain race (snapshot when every car has finished lap 3; the leaders are up to ~5 s into lap 4 by then, asserted joker lap 4 for all); this halves the
+	# runtime of two separate races.
+	var jt := await _joker_race(5, 1, 0.0, false, 3, 4, true, true, true, 3)
+	var pk: Dictionary = jt.plain
+	print("INFO: pack plain (3 cars, first 3 laps of the 4-lap race): ", pk)
+	print("INFO: pack joker (3 cars, 4 laps): ", jt)
+	cu.check(jt.joker_lap.count(4) == 3, "pack: every car takes the joker on lap 4, so laps 1..3 are a plain race (joker laps %s)" % str(jt.joker_lap))
 	for i in 3:
-		cu.check(pk.finished[i] != RaceManager.NEVER, "pack: car %d finishes (tick %d)" % [i, pk.finished[i]])
+		cu.check(pk.laps[i] >= 3, "pack: car %d completes 3 laps (tick %d)" % [i, pk.ticks])
 		cu.check_range("pack: car %d longest stop (< 2 m/s) off the road (s, gate 5 s)" % i, pk.stranded[i], 0.0, 5.0)
 		cu.check(pk.wrong[i] == 0, "pack: car %d has no wrong-way flag (%d)" % [i, pk.wrong[i]])
 		cu.check_range("pack: car %d off-track events in 3 laps (gate 2)" % i, float(pk.off[i]), 0.0, 2.0)
@@ -576,9 +598,7 @@ func _pack_checks() -> void:
 	cu.check(pk.pair_contacts == 0, "pack: no car-car contact in the plain race (%d contacts, peak closing speed %.2f m/s)" % [pk.pair_contacts, pk.impact])
 	cu.check(pk.pass_ticks[1] + pk.pass_ticks[2] + pk.follow_ticks[1] + pk.follow_ticks[2] > 0, "pack: tactics were active (pass ticks %s, follow ticks %s)" % [str(pk.pass_ticks), str(pk.follow_ticks)])
 
-	# --- 9. the same pack with the joker, 4 laps: grass ticks next to the 3-lap plain baseline ---
-	var jt := await _joker_race(5, 1, 0.0, false, 3, 4, true, true, true)
-	print("INFO: pack joker (3 cars, 4 laps): ", jt)
+	# --- 9. joker race: grass ticks per car next to the 3-lap plain baseline ---
 	var base_grass := 0
 	for g in pk.grass:
 		base_grass = maxi(base_grass, g)
@@ -586,6 +606,7 @@ func _pack_checks() -> void:
 	print("INFO: grass ticks per car: plain 3 laps %s, joker 4 laps %s (issue baseline %d); the detour surface is not grass, so any excess would be tactics" % [str(pk.grass), str(jt.grass), GRASS_BASE_TICKS])
 	cu.check(jt.state == RaceManager.State.FINISHED, "pack joker: race finished (%d ticks)" % jt.ticks)
 	for i in 3:
+		cu.check(jt.finished[i] != RaceManager.NEVER, "pack joker: car %d finishes (tick %d)" % [i, jt.finished[i]])
 		cu.check(jt.crossings[i] == 1, "pack joker: car %d takes the joker exactly once (%d)" % [i, jt.crossings[i]])
 		cu.check_range("pack joker: car %d grass ticks (2x the plain baseline)" % i, float(jt.grass[i]), 0.0, float(allowance))
 		cu.check_range("pack joker: car %d off-track events (gate 2)" % i, float(jt.off[i]), 0.0, 2.0)
