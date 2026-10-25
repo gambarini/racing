@@ -48,6 +48,7 @@ var obstacle_speed_ratio := 0.5 ## ahead slower than this fraction of own speed 
 var follow_dist := 6.0 ## m bumper gap kept when following
 var follow_time := 1.5 ## s to close the remaining gap when following
 var use_joker := true ## false = never take the joker (tests: plain race on a track that has one)
+var route_frame := true ## false = lateral always from the main centre line (pre-#177; negative control)
 var lane_rate := 1.5 ## m/s, mirrors AiDriver.lane_rate (shift-time estimate)
 
 ## Outputs.
@@ -164,7 +165,7 @@ func _to_route_frame(drv: AiDriver) -> void:
 	on_detour = false
 	var line := drv.line
 	var trk := mgr.track
-	if line.variant != RacingLine.Variant.JOKER or trk.joker_curve == null:
+	if not route_frame or line.variant != RacingLine.Variant.JOKER or trk.joker_curve == null:
 		return
 	if drv.s < line.joker_span_joker.x or drv.s > line.joker_span_joker.y:
 		return
