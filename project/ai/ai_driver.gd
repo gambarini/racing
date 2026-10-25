@@ -39,8 +39,8 @@ var brake_kp := 0.35 ## brake per m/s of overspeed
 var brake_deadband := 0.3 ## m/s of overspeed tolerated before braking
 var lead_time := 0.25 ## s of speed look-ahead on the target profile
 ## Fraction of the line's target speed driven (#30 skill hook; a command-side limit, not a physics
-## multiplier). 0.9 because the solver has no friction-circle budget yet (#154): at 1.0 the car runs
-## wide / off road in the Quarry's long corners.
+## multiplier). 0.9 keeps margin for the fastest line skills (#171: the line baked at skill 0.66
+## completes laps at 1.0 too; above ~0.7 effective the car runs wide in the long Quarry corners).
 var speed_scale := 0.9
 ## Slip-aware throttle cut and counter-steer.
 var slip_target_deg := 8.0 ## (estimate, #28)
