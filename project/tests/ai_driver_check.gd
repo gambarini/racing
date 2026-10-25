@@ -129,12 +129,17 @@ func _main() -> void:
 	for i in mini(la.size(), lb.size()):
 		same = same and la[i]["ticks"] == lb[i]["ticks"]
 	cu.check(same, "identical lap ticks across two runs")
-	# #154 (informational): skill 1.0 line at speed_scale 1.0. The AI/car combination leaves the road
-	# at this setting (see PR #154 notes), so this is reported, not asserted. AI_SKILL / AI_SCALE override.
+	# #171: skill 0.66 at speed_scale 1.0 (the steering command is range-compensated) completes
+	# 3 consecutive laps without leaving the road.
+	var fast := await _lap_run("", 0.66, 1.0)
+	print("INFO: skill 0.66 scale 1.0: laps %d, max centre %.2f m, grass ticks %d" % [fast.laps.size(), fast.max_centre, fast.grass])
+	cu.check(fast.laps.size() >= LAPS, "skill 0.66 / scale 1.0 completes %d laps (%d)" % [LAPS, fast.laps.size()])
+	cu.check_range("skill 0.66 / scale 1.0 max centre-line offset (m)", fast.max_centre, 0.0, 6.5)
+	# Informational sweep: AI_SKILL / AI_SCALE override (see tests/support/ai_grip_sweep.gd for more).
 	if OS.get_environment("AI_SKILL") != "":
-		var fast := await _lap_run("", float(OS.get_environment("AI_SKILL")), float(OS.get_environment("AI_SCALE")))
+		var sweep := await _lap_run("", float(OS.get_environment("AI_SKILL")), float(OS.get_environment("AI_SCALE")))
 		print("INFO: skill %s scale %s: laps %d, max centre %.2f m, grass ticks %d" % [
-				OS.get_environment("AI_SKILL"), OS.get_environment("AI_SCALE"), fast.laps.size(), fast.max_centre, fast.grass])
+				OS.get_environment("AI_SKILL"), OS.get_environment("AI_SCALE"), sweep.laps.size(), sweep.max_centre, sweep.grass])
 	for i in 5:
 		await process_frame
 	cu.finish(self)

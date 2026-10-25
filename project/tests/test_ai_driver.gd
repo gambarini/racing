@@ -180,3 +180,19 @@ func test_step_memory_flat_with_telemetry() -> void:
 	for i in 600:
 		ai.step(Vector3(12.0 + float(i) * 0.2, 0, -1), Vector3(1, 0, 0), 20.0, 3.0, DT, st)
 	assert_lt(Performance.get_monitor(Performance.MEMORY_STATIC) - before, 64 * 1024, "no per-tick allocation growth")
+
+
+func test_range_compensation_gives_the_pursuit_wheel_angle_at_speed() -> void:
+	# 1 m off the line at 100 km/h: the settled steer is the pursuit command divided by the
+	# filter's speed range (#171), i.e. ~1/range_scale times the uncompensated one.
+	var speed := 100.0 / 3.6
+	var on := _driver()
+	var off := _driver()
+	off.range_compensation = false
+	var st_on := DriverInputState.new()
+	var st_off := DriverInputState.new()
+	for i in 240:
+		on.step(Vector3(0, 0, -1), Vector3(1, 0, 0), speed, 0.0, DT, st_on)
+		off.step(Vector3(0, 0, -1), Vector3(1, 0, 0), speed, 0.0, DT, st_off)
+	assert_gt(st_off.steer, 0.0)
+	assert_almost_eq(st_on.steer / st_off.steer, 1.0 / SteeringFilter.range_scale(speed * 3.6), 0.02)

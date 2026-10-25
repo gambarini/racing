@@ -44,7 +44,7 @@ static func stats(times: Array) -> Dictionary:
 ## road today; #178 tracks the AI fix, #179 the in-process run drift. Everything else (completion, flying-lap
 ## bounds, std-dev, CSV, determinism in run_ci.sh) stays enforced. When the gates pass, this check FAILS
 ## until the entry is removed.
-const XFAIL := ["quarry/rwd"]
+const XFAIL := [] ## #178 fixed by #171 (steer range compensation): quarry/rwd passes the gates now
 
 
 func _run_pass(runner: Object, laps: int, only: String) -> Dictionary:

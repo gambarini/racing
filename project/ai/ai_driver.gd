@@ -39,13 +39,14 @@ var brake_kp := 0.35 ## brake per m/s of overspeed
 var brake_deadband := 0.3 ## m/s of overspeed tolerated before braking
 var lead_time := 0.25 ## s of speed look-ahead on the target profile
 ## Fraction of the line's target speed driven (#30 skill hook; a command-side limit, not a physics
-## multiplier). 0.9 because the solver has no friction-circle budget yet (#154): at 1.0 the car runs
-## wide / off road in the Quarry's long corners.
+## multiplier). 0.9 keeps margin for the fastest line skills (#171: the line baked at skill 0.66
+## completes laps at 1.0 too; above ~0.7 effective the car runs wide in the long Quarry corners).
 var speed_scale := 0.9
 ## Slip-aware throttle cut and counter-steer.
 var slip_target_deg := 8.0 ## (estimate, #28)
 var slip_span_deg := 6.0 ## throttle reaches 0 this far above the target
 var counter_gain := 1.0
+var range_compensation := true ## divide the steer command by the filter's speed range scale (#171)
 ## Pedal ramp like the player's keyboard (DriverInput.pedal_rate_*).
 var pedal_rate_up := 14.0
 var pedal_rate_down := 20.0
@@ -178,6 +179,10 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	if slip_active:
 		# steer toward the slide by the slip beyond the target, on top of the pursuit command
 		want = clampf(want + signf(slip_deg) * deg_to_rad(over) / max_steer_rad * counter_gain, -1.0, 1.0)
+	# SteeringFilter scales the command by its speed range; undo that so the wheel angle is the one
+	# pure pursuit asked for (#171: without it the front axle gets ~half the angle at 110 km/h).
+	if range_compensation:
+		want = clampf(want / SteeringFilter.range_scale(speed * 3.6), -1.0, 1.0)
 	_steer = SteeringFilter.step_steer(_steer, want, dt, speed * 3.6)
 	st.steer = _steer
 	# --- Speed: PI on the profile a little ahead ---
