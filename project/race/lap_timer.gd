@@ -6,7 +6,8 @@ extends RefCounted
 ## gate 0 and completes when gate 0 is crossed again after every gate 1..n-1 was crossed in
 ## order. In standing-start mode (`start_standing()`, #141) lap 1 starts at the explicit signal
 ## tick; a grid slot behind the line crosses gate 0 once to clear the grid, a slot past the
-## line goes straight to gate 1 (#143). Out-of-order crossings are ignored. `sector_end_gates` lists the gate indices ending sector 1 and 2;
+## line goes straight to gate 1 (#143). Out-of-order crossings are ignored.
+## `sector_end_gates` lists the gate indices ending sector 1 and 2;
 ## the last sector ends at the finish line, so sector ticks always sum to the lap ticks.
 
 signal lap_completed(record: Dictionary)
@@ -25,7 +26,7 @@ var out_of_order_crossings := 0
 var last_gate_crossed := -1  ## last valid gate this lap, for reset-to-track
 
 var joker_lap := 0  ## #150: lap number (1-based) in which the joker gate first registered, 0 = never
-var joker_crossings := 0
+var joker_crossings := 0  ## total joker-gate crossings (read by the race checks; not used by the game code)
 var penalty_ticks := 0  ## penalties accrued in the running lap (reset-to-track), in ticks
 var _lap_start_tick := 0
 var _sector_start_tick := 0
