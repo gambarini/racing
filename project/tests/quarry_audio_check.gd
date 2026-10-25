@@ -19,6 +19,8 @@ const IDS: Array[StringName] = [&"tarmac", &"dirt", &"gravel", &"mud", &"grass"]
 const GRASS_S := 10.0 ## flat straight start zone; grass is sampled beside the road there
 const GRASS_OFFSET := 8.0 ## m beyond the road edge
 const WIN := 6 ## ticks per 50 ms at 120 Hz
+## Wall-clock wait for the audio thread to release stopped playbacks (no signal to poll for it).
+const AUDIO_RELEASE_MS := 500
 const AUDIBLE_DB := -40.0 ## below this a loop is in its start/stop snap region
 const SKIP_TICKS := 120 * 6 ## standing-start launch excluded from the slip statistics
 const MAX_LAP_TICKS := 120 * 120
@@ -128,16 +130,16 @@ func _hold(d: QuarryDrive, speed: float, ticks: int) -> void:
 ## Loudest active roll loop: {id, db, pitch, stream}.
 func _loudest_roll(a: VehicleAudio) -> Dictionary:
 	var best := {"id": &"", "db": -80.0, "pitch": 1.0, "stream": ""}
-	for s in a._ids.size():
-		var pl: AudioStreamPlayer = a._roll[s]
+	for s in a.surface_count():
+		var pl := a.roll_player(s)
 		if pl != null and pl.volume_db > best.db:
-			best = {"id": a._ids[s], "db": pl.volume_db, "pitch": pl.pitch_scale,
+			best = {"id": a.surface_id(s), "db": pl.volume_db, "pitch": pl.pitch_scale,
 					"stream": pl.stream.resource_path}
 	return best
 
 
 func _slip_db(a: VehicleAudio, id: StringName) -> float:
-	var pl: AudioStreamPlayer = a._slip[a._idx[id]]
+	var pl := a.slip_player_for(id)
 	return pl.volume_db if pl != null else -80.0
 
 
@@ -284,7 +286,7 @@ func _main() -> void:
 	SurfaceAudioRegistry.clear()
 	# The audio thread releases stopped playbacks in wall-clock time; headless runs are faster than
 	# real time, so give it a moment or the exit reports a leaked stream.
-	OS.delay_msec(500)
+	OS.delay_msec(AUDIO_RELEASE_MS)
 	await physics_frame
 	DirAccess.remove_absolute(GHOST)
 	cu.finish(self)
@@ -300,7 +302,7 @@ func _lap(audio: bool) -> Dictionary:
 	drv.setup(pts, d.quarry.route_mu(pts))
 	d.autopilot = drv
 	var a: VehicleAudio = _audio(d) if audio else null
-	var slots := 40
+	var slots := 2 * a.surface_count() if audio else 0 # one roll + one slip loop per surface
 	var hist := PackedFloat32Array() # ring of the last WIN volumes per player slot
 	hist.resize(slots * WIN)
 	hist.fill(-80.0)
@@ -314,9 +316,9 @@ func _lap(audio: bool) -> Dictionary:
 		if not audio or ticks < SKIP_TICKS:
 			continue
 		var k := 0
-		for arr in [a._roll, a._slip]:
-			for pl: AudioStreamPlayer in arr:
-				if pl == null or k >= slots:
+		for s in a.surface_count():
+			for pl in [a.roll_player(s), a.slip_player(s)]:
+				if pl == null:
 					k += 1
 					continue
 				var v: float = pl.volume_db if pl.playing else -80.0
