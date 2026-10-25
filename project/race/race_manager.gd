@@ -278,7 +278,8 @@ func step(positions: PackedVector3Array, speeds: PackedFloat32Array) -> void:
 func _step_countdown(positions: PackedVector3Array) -> void:
 	var n := timers.size()
 	var on_count := _state_tick % _count_ticks == 0
-	if on_count and _state_tick / _count_ticks >= countdown_steps:
+	var count_step := floori(float(_state_tick) / float(_count_ticks)) # float division: no int-division warning
+	if on_count and count_step >= countdown_steps:
 		_go()
 		return
 	if _baseline_pending:
@@ -292,7 +293,7 @@ func _step_countdown(positions: PackedVector3Array) -> void:
 				jump_started[i] = true
 				add_penalty(i, jump_start_penalty, JUMP_REASON)
 	if on_count:
-		countdown_tick.emit(countdown_steps - _state_tick / _count_ticks)
+		countdown_tick.emit(countdown_steps - count_step)
 	_state_tick += 1
 
 
@@ -363,6 +364,8 @@ func _eff_key(i: int) -> float:
 
 ## True when car `a` must move in front of car `b` (currently ahead of it).
 func _ahead(a: int, b: int) -> bool:
+	# Hysteresis applies to any non-zero key difference; exactly equal keys fall through to the
+	# deterministic tie-breaks below, which are not damped (equal keys are rare, ties are stable).
 	var diff := _eff_key(a) - _eff_key(b)
 	if diff != 0.0:
 		return diff > RANK_HYSTERESIS
@@ -371,6 +374,9 @@ func _ahead(a: int, b: int) -> bool:
 	return a < b
 
 
+## The race ends when every car has finished or retired, or `finish_grace_seconds` after the first
+## finisher. There is deliberately no overall timeout: if nobody ever finishes, the race runs until a
+## car retires or the player quits. A field of zero cars has nothing pending and ends at once.
 func _check_race_end() -> void:
 	var pending := false
 	for i in timers.size():

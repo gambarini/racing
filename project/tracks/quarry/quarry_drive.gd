@@ -42,6 +42,8 @@ func _ready() -> void:
 
 ## Switches the car to the racing-line AI (#28) and adds its debug draw (F4, hidden by default).
 func start_ai(line: RacingLine, telemetry_capacity := 0) -> AiDriver:
+	if ai_debug != null: # a second call replaces the first driver and its debug node
+		ai_debug.queue_free()
 	ai_driver = AiDriver.new()
 	ai_driver.setup(line, telemetry_capacity)
 	ai_debug = AiDriverDebug.new()
