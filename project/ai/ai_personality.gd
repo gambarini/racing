@@ -16,7 +16,7 @@ enum Difficulty { EASY, MEDIUM, HARD }
 const SKILL_CAP := 0.70 ## highest effective skill verified by #171 (0.80 fails, #187)
 const MEAN_SKILL := [0.50, 0.594, 0.66] ## per Difficulty (estimate)
 const MEAN_CONSISTENCY := [0.6, 0.8, 0.95] ## per Difficulty (estimate)
-const SKILL_SPREAD := 0.03 ## +- around the mean (estimate)
+const SKILL_SPREAD := 0.02 ## +- around the mean; inside the issue's +-0.03 (estimate), see the Medium field spread in ai_personality_check
 const TRAIT_SPREAD := 0.25 ## +- around 0.5 for aggression / bravery / contact tolerance
 
 @export_range(0.0, 1.0) var skill := 0.594: set = _set_skill ## fraction of grip-limited corner speed (before the cap)
