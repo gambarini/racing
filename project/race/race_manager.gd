@@ -15,6 +15,7 @@ signal penalty_added(entry: Dictionary)  ## {car, seconds, reason, tick}
 signal car_finished(car: int, race_ticks: int)
 signal race_finished(results: Array)  ## [{rank, car, name, time, race_time, best_lap, penalties, penalty_list, joker_taken, dnf, finish_tick}]
 signal joker_taken_by(car: int, lap: int)
+signal track_limit_warning(car: int)  ## first track-limit violation of a car (#174): warning only
 
 enum State { IDLE, COUNTDOWN, RACING, FINISHED }
 
@@ -25,6 +26,8 @@ const GRID_ZONE_BEHIND := 77.0  ## flat start zone is s -80..+60; keep the last 
 const JUMP_REASON := &"jump_start"
 const JOKER_REASON := &"joker_missed"
 const RESET_REASON := &"reset"
+const LIMITS_REASON := &"track_limits"
+const WHEEL_REACH := 3.5  ## m: car centre farther than this inside the road edge cannot have a wheel off
 const NEVER := -1
 const RANK_HYSTERESIS := 0.3  ## m a car must lead by before it takes the place
 
@@ -35,6 +38,9 @@ const RANK_HYSTERESIS := 0.3  ## m a car must lead by before it takes the place
 @export var jump_start_penalty := 5.0  ## s (estimate)
 @export var joker_required := true  ## mandatory once per race when the track has a joker gate (ruling)
 @export var joker_missed_penalty := 10.0  ## s (estimate; above the measured +2.54 s joker cost)
+@export var track_limits_enabled := true  ## needs wheel input (see set_wheels_off) or a Vehicle body
+@export var track_limit_penalty := 2.0  ## s per violation after the first (estimate)
+@export var track_limit_debounce := 0.5  ## s with a wheel back on the road to end an excursion (estimate)
 @export var finish_grace_seconds := 30.0  ## after the first finisher (estimate)
 @export var min_gap_speed := 5.0  ## m/s floor for the gap-to-car-ahead estimate
 
@@ -63,6 +69,13 @@ var speeds_now := PackedFloat32Array()
 var line_s := PackedFloat32Array()  ## #29: centre-line offset of each car (m)
 var lateral := PackedFloat32Array()  ## #29: signed distance from the centre line (m), + = right of travel
 
+var wheels_off := PackedByteArray()  ## #174: wheels beyond the road edge per car (0..4)
+var limit_violations := PackedInt32Array()  ## #174: track-limit excursions per car
+var wheel_pos := PackedVector3Array()  ## #174: 4 world wheel positions per car with wheel_src
+var wheel_src: Array[bool] = []  ## the car's wheels_off is derived from wheel_pos / its Vehicle
+
+var _limits: Array[TrackLimits] = []
+var _vehicles: Array[Vehicle] = []
 var _key := PackedFloat64Array()
 var _cross_tick := PackedInt32Array()
 var _last_laps := PackedInt32Array()
@@ -103,6 +116,13 @@ func add_car(body: RigidBody3D = null, car_name := "") -> int:
 	joker_taken.append(false)
 	joker_lap.append(0)
 	bodies.append(body)
+	_vehicles.append(body as Vehicle)
+	_limits.append(TrackLimits.new(tick_dt, track_limit_debounce))
+	wheels_off.append(0)
+	limit_violations.append(0)
+	wheel_src.append(body is Vehicle and (body as Vehicle).wheels.size() >= 4)
+	for k in 4:
+		wheel_pos.append(Vector3.ZERO)
 	jump_started.append(false)
 	retired.append(false)
 	finish_ticks.append(NEVER)
@@ -166,6 +186,21 @@ func add_penalty(car: int, seconds: float, reason: StringName) -> void:
 	var entry := {"car": car, "seconds": seconds, "reason": reason, "tick": tick}
 	ledger.append(entry)
 	penalty_added.emit(entry)
+
+
+## Scripted wheel input (tests, replays): `n` wheels of `car` are beyond the road edge.
+func set_wheels_off(car: int, n: int) -> void:
+	wheels_off[car] = n
+	wheel_src[car] = false
+
+
+## Scripted wheel positions (world) of `car`; wheels_off is derived from them against the track.
+func set_wheel_positions(car: int, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	wheel_pos[car * 4] = a
+	wheel_pos[car * 4 + 1] = b
+	wheel_pos[car * 4 + 2] = c
+	wheel_pos[car * 4 + 3] = d
+	wheel_src[car] = true
 
 
 func _on_timer_penalty(seconds: float, car: int) -> void:
@@ -272,7 +307,44 @@ func step(positions: PackedVector3Array, speeds: PackedFloat32Array) -> void:
 	_update_progress(positions)
 	_rank()
 	if state == State.RACING:
+		if track_limits_enabled:
+			_step_limits()
 		_check_race_end()
+
+
+## Track limits (#174): classify each car's wheels against the road edge, then advance its
+## excursion tracker. Cars whose centre is well inside the road skip the per-wheel work.
+func _step_limits() -> void:
+	for i in timers.size():
+		if retired[i] or finish_ticks[i] != NEVER:
+			continue
+		if wheel_src[i] and track.road_half_width > 0.0:
+			_classify_wheels(i)
+		var r := _limits[i].step(wheels_off[i])
+		if r == TrackLimits.Result.NONE:
+			continue
+		limit_violations[i] = _limits[i].violations
+		if r == TrackLimits.Result.WARNING:
+			track_limit_warning.emit(i)
+		else:
+			add_penalty(i, track_limit_penalty, LIMITS_REASON)
+
+
+func _classify_wheels(i: int) -> void:
+	if absf(lateral[i]) < track.road_half_at(line_s[i]) - WHEEL_REACH:
+		wheels_off[i] = 0
+		return
+	var v := _vehicles[i]
+	var n := 0
+	for k in 4:
+		var p: Vector3
+		if v != null:
+			p = v.wheels[k].global_position
+		else:
+			p = wheel_pos[i * 4 + k]
+		if track.is_off_road(p):
+			n += 1
+	wheels_off[i] = n
 
 
 func _step_countdown(positions: PackedVector3Array) -> void:
