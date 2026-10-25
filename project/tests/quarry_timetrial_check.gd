@@ -65,7 +65,7 @@ func _run(route: StringName, laps: int, penalty := false, log_ghost := false) ->
 			_lt.add_penalty(1.0)
 		was_running = _lt.running
 		# Live replay of the saved best: log ghost and car on every tick of lap 2 (lap 1 starts from rest).
-		if log_ghost and _lt.running and _lt.laps.size() == 1 and _tt._replay_tick >= 0:
+		if log_ghost and _lt.running and _lt.laps.size() == 1 and _tt.replay_tick() >= 0:
 			_ghost_log.append(_tt.ghost.global_position)
 			_car_log.append(_veh.global_position)
 	return {"drive": drive, "tt": _tt, "timer": _lt, "ticks": ticks, "finished": _finished.duplicate(),
@@ -150,8 +150,7 @@ func _main() -> void:
 		cu.check(loaded != null and loaded.ticks == best.ticks and loaded.sample_count() == best.sample_count(),
 				"saved file round-trips ticks and samples")
 		# Ghost driven to its last sample.
-		tt._replay_tick = best.ticks
-		tt._update_ghost()
+		tt.seek(best.ticks)
 		var gp: Vector3 = tt.ghost.global_position
 		var final_pose := best.pose_at_index(best.sample_count() - 1).origin
 		cu.check_range("ghost at last sample vs recorded final pose (m)", gp.distance_to(final_pose), 0.0, 0.5)
