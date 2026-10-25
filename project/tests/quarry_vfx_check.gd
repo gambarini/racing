@@ -13,8 +13,6 @@ extends SceneTree
 const CheckUtil := preload("res://tests/support/check_util.gd")
 const SCENE := "res://tracks/quarry/quarry_drive.tscn"
 const IDS: Array[StringName] = [&"tarmac", &"dirt", &"gravel", &"mud", &"grass"]
-const GRASS_S := 10.0
-const GRASS_OFFSET := 8.0
 const MAX_LAP_TICKS := 120 * 120
 const GHOST := "user://test_ghost_quarry_vfx.dat" ## never the player's user://ghost_best.dat (#153)
 
@@ -33,76 +31,6 @@ func _spawn(remove := false) -> QuarryDrive:
 	d.get_node("TimeTrial").ghost_path = GHOST
 	root.add_child(d)
 	return d
-
-
-func _vfx(d: QuarryDrive) -> VehicleVfx:
-	return d.get_node("Vehicle/VehicleVfx")
-
-
-func _lat(q: Quarry, id: StringName, s: float) -> float:
-	return q.road_half(s) + GRASS_OFFSET if id == &"grass" else 0.0
-
-
-func _pos(q: Quarry, s: float, lat: float) -> Vector3:
-	var smp: Dictionary = q.track.sample(s)
-	var fwd: Vector3 = smp["forward"]
-	return (smp["position"] as Vector3) + fwd.cross(Vector3.UP) * lat
-
-
-func _weight(q: Quarry, s: float, lat: float, id: StringName) -> float:
-	var p := _pos(q, s, lat)
-	return q.terrain.surface_map.sample(p.x, p.z).get(id, 0.0)
-
-
-## Middle of the longest purest stretch of `id` on the main line.
-func _mid_zone(q: Quarry, id: StringName) -> float:
-	if id == &"grass":
-		return GRASS_S
-	var n := int(q.track.length() / 2.0)
-	var run_lo := 0
-	var best_lo := 0
-	var best_len := 0
-	for i in n + 1:
-		var pure := false
-		if i < n:
-			pure = true
-			for dd in range(-5, 6, 5):
-				if _weight(q, i * 2.0 + dd, 0.0, id) < 0.99:
-					pure = false
-					break
-		if pure:
-			continue
-		if i - run_lo > best_len:
-			best_len = i - run_lo
-			best_lo = run_lo
-		run_lo = i + 1
-	return (best_lo + best_lo + best_len - 1) * 1.0
-
-
-func _teleport(d: QuarryDrive, s: float, lat: float, speed: float) -> void:
-	var fwd: Vector3 = d.quarry.track.sample(s)["forward"]
-	var pos := _pos(d.quarry, s, lat)
-	pos.y = d.quarry.terrain.height_at(pos.x, pos.z) + d.spawn_lift
-	d.vehicle.global_transform = Transform3D(Basis.looking_at(fwd, Vector3.UP), pos)
-	d.vehicle.linear_velocity = fwd * speed
-	d.vehicle.angular_velocity = Vector3.ZERO
-	for w in d.vehicle.wheels:
-		w.omega = speed / w.radius
-
-
-func _speed(d: QuarryDrive) -> float:
-	return d.vehicle.linear_velocity.dot(-d.vehicle.global_transform.basis.z)
-
-
-func _hold(d: QuarryDrive, speed: float, ticks: int) -> void:
-	for i in ticks:
-		var err := speed - _speed(d)
-		var st := d.driver_input.state
-		st.steer = 0.0
-		st.handbrake = false
-		st.throttle = clampf(err * 0.5, 0.0, 1.0)
-		st.brake = clampf(-err * 0.5, 0.0, 1.0)
-		await physics_frame
 
 
 ## {wheels: wheels with an emitting emitter for `id`, exist: wheels having one, ratio: summed
@@ -127,10 +55,10 @@ func _main() -> void:
 	# 1. wiring
 	var d := _spawn()
 	await physics_frame
-	var vf := _vfx(d)
+	var vf := VfxScenario.vfx(d)
 	cu.check(vf.get_parent() == d.vehicle, "VehicleVfx is a child of the Vehicle")
 	cu.check(d.vehicle.find_children("*", "VehicleVfx", true, false).size() == 1, "exactly one VehicleVfx on the car")
-	await _hold(d, 10.0, 120)
+	await VfxScenario.hold(self, d, 10.0, 120)
 	cu.check(vf.vehicle == d.vehicle, "VehicleVfx is bound to the Vehicle")
 	cu.check(get_nodes_in_group(&"tyre_marks").size() == 1, "exactly one TyreMarks in the scene")
 	cu.check(vf.tyre_marks != null and vf.tyre_marks.get_parent() != null, "VehicleVfx found/created the TyreMarks")
@@ -142,24 +70,24 @@ func _main() -> void:
 	await physics_frame
 	var mids := {}
 	for id in IDS:
-		mids[id] = _mid_zone(probe.quarry, id)
+		mids[id] = VfxScenario.mid_zone(probe.quarry, id)
 		var s: float = mids[id]
-		cu.check(_weight(probe.quarry, s, _lat(probe.quarry, id, s), id) > 0.99, "control: %s mid-zone s=%.0f is pure" % [id, s])
+		cu.check(VfxScenario.weight(probe.quarry, s, VfxScenario.lat(probe.quarry, id, s), id) > 0.99, "control: %s mid-zone s=%.0f is pure" % [id, s])
 	probe.queue_free()
 	await physics_frame
 	for id in IDS:
 		var dr := _spawn()
 		await physics_frame
-		var v := _vfx(dr)
+		var v := VfxScenario.vfx(dr)
 		var s: float = mids[id]
 		var eff := SurfaceRegistry.get_surface(id).particle_effect
-		_teleport(dr, s - 30.0, _lat(dr.quarry, id, s), 15.0)
-		await _hold(dr, 15.0, 120)
+		VfxScenario.teleport(dr, s - 30.0, VfxScenario.lat(dr.quarry, id, s), 15.0)
+		await VfxScenario.hold(self, dr, 15.0, 120)
 		var roll_wheels := 99
 		var roll_exist := 99
 		var roll_ratio := 0.0
 		for i in 120:
-			await _hold(dr, 15.0, 1)
+			await VfxScenario.hold(self, dr, 15.0, 1)
 			var r := _sample(v, id)
 			roll_wheels = mini(roll_wheels, r.wheels)
 			roll_exist = mini(roll_exist, r.exist)
@@ -170,8 +98,8 @@ func _main() -> void:
 			cu.check(roll_wheels >= 2, "%s: rolling emitters emitting on >= 2 wheels (%d)" % [id, roll_wheels])
 		else:
 			cu.check(roll_ratio < 0.25, "%s: roll_rate 0, smoke only on slip: rolling ratio sum %.3f < 0.25 (residual slip only)" % [id, roll_ratio])
-		_teleport(dr, s - 25.0, _lat(dr.quarry, id, s), 20.0)
-		await _hold(dr, 20.0, 12)
+		VfxScenario.teleport(dr, s - 25.0, VfxScenario.lat(dr.quarry, id, s), 20.0)
+		await VfxScenario.hold(self, dr, 20.0, 12)
 		var lock_ratio := 0.0
 		var lock_wheels := 0
 		var lock_int := 0.0
@@ -212,7 +140,7 @@ func _lap(vfx: bool) -> Dictionary:
 	var drv := QuarryDriver.new()
 	drv.setup(pts, d.quarry.route_mu(pts))
 	d.autopilot = drv
-	var v: VehicleVfx = _vfx(d) if vfx else null
+	var v: VehicleVfx = VfxScenario.vfx(d) if vfx else null
 	var particles := 0.0
 	var marks := 0
 	var ticks := 0

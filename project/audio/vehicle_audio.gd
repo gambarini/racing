@@ -52,6 +52,31 @@ func bind_vehicle(v: Vehicle) -> void:
 	wheels = v.wheels
 
 
+## Number of surfaces (roll/slip loop slot pairs). Read-only accessors for tests.
+func surface_count() -> int:
+	return _ids.size()
+
+
+func surface_id(s: int) -> StringName:
+	return _ids[s]
+
+
+## Roll loop player of surface slot `s`, or null until that surface was first seen.
+func roll_player(s: int) -> AudioStreamPlayer:
+	return _roll[s]
+
+
+## Slip loop player of surface slot `s`, or null until that surface was first seen.
+func slip_player(s: int) -> AudioStreamPlayer:
+	return _slip[s]
+
+
+## Slip loop player of surface `id`, or null (unknown surface or not yet created).
+func slip_player_for(id: StringName) -> AudioStreamPlayer:
+	var s: int = _idx.get(id, -1)
+	return _slip[s] if s >= 0 else null
+
+
 ## Number of AudioStreamPlayer children (voice budget; tested).
 func player_count() -> int:
 	var n := 0

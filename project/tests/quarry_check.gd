@@ -27,7 +27,7 @@ func _main() -> void:
 	cu.check(terrain != null and track != null and track.is_valid(), "quarry has terrain and a valid TrackSpline")
 	var len := track.length()
 	print("INFO: track length %.0f m, %d gates" % [len, track.gate_count()])
-	cu.check_range("track length (m)", len, 1500.0, 3500.0)
+	cu.check_range("track length (m)", len, 1600.0, 3500.0) # baseline 1668 m (#104)
 
 	# Elevation range.
 	var hmin := 1e9

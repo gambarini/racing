@@ -167,6 +167,21 @@ func test_file_round_trip() -> void:
 	assert_null(tt3.best)
 
 
+func test_ghost_with_other_tick_rate_is_ignored() -> void:
+	_lap(40.0)
+	var g := GhostLap.load_file(PATH)
+	assert_not_null(g)
+	g.tick_hz = Engine.physics_ticks_per_second + 60 # recorded at another rate: replay would run at the wrong speed
+	assert_true(g.save(PATH))
+	var v := Vehicle.new()
+	add_child_autofree(v)
+	var tt2 := TimeTrial.new()
+	tt2.ghost_path = PATH
+	add_child_autofree(tt2)
+	tt2.setup(v, track.make_lap_timer(DT), "circle")
+	assert_null(tt2.best, "a ghost with a different tick_hz is not loaded")
+
+
 func test_corrupt_file_loads_null() -> void:
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	f.store_string("garbage")

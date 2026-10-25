@@ -91,6 +91,17 @@ func _finish_lap(xf: Transform3D, steer: float, throttle: float, brake: float, h
 	_rec = null
 
 
+## Put the ghost at replay tick `tick` (clamped to the recording by `pose_at_tick`) and start replaying from there.
+func seek(tick: int) -> void:
+	_replay_tick = tick
+	_update_ghost()
+
+
+## Current replay tick, -1 when not replaying.
+func replay_tick() -> int:
+	return _replay_tick
+
+
 func _update_ghost() -> void:
 	if ghost == null:
 		return

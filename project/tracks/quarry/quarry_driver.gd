@@ -22,7 +22,6 @@ var lookahead_time := 0.45 ## s
 var steer_rate := 3.0 ## full-scale steer units per second
 var wheelbase := 2.5
 var max_steer_rad := deg_to_rad(34.0)
-## Speed error (m/s) that maps to full throttle / full brake.
 var steer_slack := 0.10 ## rad of steering on top of the geometric angle (tyre slip angle)
 var steer_grip := 1.6 ## steering limit as a multiple of the grip-limited lateral acceleration
 var stanley_k := 2.0 ## 1/s
@@ -33,6 +32,7 @@ var tc_alpha0 := deg_to_rad(5.0) ## rear slip angle where the throttle starts to
 var tc_alpha_span := deg_to_rad(8.0)
 var tc_kappa0 := 0.12 ## rear slip ratio where the throttle starts to lift
 var tc_kappa_span := 0.2
+## Speed error (m/s) that maps to full throttle / full brake.
 var throttle_span := 3.0
 var brake_span := 3.0
 

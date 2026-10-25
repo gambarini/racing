@@ -3,11 +3,14 @@ extends RefCounted
 ## Wrong-way flag from velocity vs. the centre-line tangent (issue #106). Pure logic: feed
 ## `step()` once per physics tick. The flag is set after `set_after` seconds of continuous
 ## velocity . tangent < 0 and cleared after `clear_after` seconds of continuous heading
-## with dot >= 0 or speed below `min_speed` (a slow or stationary car counts as correct). Time is counted in whole ticks.
+## with dot >= 0 or speed below `min_speed` (a slow or stationary car counts as correct).
+## Time is counted in whole ticks.
 
 var set_after := 2.0
 var clear_after := 0.5
-var min_speed := 3.0  ## m/s (estimate, #136): slower than this counts as correct heading
+## Speed (m/s) below which the heading counts as correct. 3 m/s is an estimate (#136); a tunable
+## Resource is not worth it until a second consumer needs a different value.
+var min_speed := 3.0
 var tick_dt := 1.0 / 120.0
 var wrong_way := false
 

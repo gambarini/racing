@@ -42,6 +42,19 @@ func test_schema_columns() -> void:
 	assert_eq(names[names.size() - 1], "vert_g") # vertical acceleration (#104) last
 
 
+func test_vert_g_free_fall_and_rest() -> void:
+	var w := _world()
+	var rec: TelemetryRecorder = w.rec
+	var v: Vehicle = w.vehicle
+	v.linear_velocity = Vector3.ZERO
+	rec.record(DT) # first sample has no previous velocity: 0
+	rec.record(DT) # velocity unchanged: rest reads 0 g
+	assert_almost_eq(rec.buffer.value(1, TelemetrySchema.VERT_G_COL), 0.0, 1e-6, "rest")
+	v.linear_velocity = Vector3(0, -TelemetryRecorder.G * DT, 0)
+	rec.record(DT) # free fall: a.y = -g
+	assert_almost_eq(rec.buffer.value(2, TelemetrySchema.VERT_G_COL), -1.0, 1e-4, "free fall")
+
+
 func test_buffer_ring_wraps_and_keeps_order() -> void:
 	var b := TelemetryBuffer.new(5)
 	var r := TelemetrySchema.new_row()

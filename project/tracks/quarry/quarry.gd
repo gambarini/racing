@@ -136,7 +136,9 @@ func build() -> void:
 	terrain.cell = CELL
 	terrain.mesh_step = 1
 	terrain.chunk_cells = 100
-	terrain.load_from_image(Image.create_from_data(N, N, false, Image.FORMAT_RF, heights.to_byte_array()), Vector2.ZERO)
+	var err := terrain.load_from_image(Image.create_from_data(N, N, false, Image.FORMAT_RF, heights.to_byte_array()), Vector2.ZERO)
+	if err != OK:
+		push_error("Quarry: heightmap rejected by HeightmapTerrain (N and mesh_step must tile)")
 	terrain.surface_map = _build_surface_map()
 	terrain.surface_map.rebuild_cache() # pre-warm: no hitch in the first physics tick (#159)
 	add_child(terrain)

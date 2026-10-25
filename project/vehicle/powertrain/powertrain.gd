@@ -31,6 +31,8 @@ var reflected_inertia := 0.0 ## kg m^2 to add to each driven wheel while locked
 var shifts := 0
 var driven := PackedInt32Array() ## wheel indices fed by the diffs, cached at construction (per-tick safe)
 var _prev_w_drive := 0.0
+var silence_misuse_error := false ## TEST ONLY: keeps the expected AWD-misuse error out of CI logs
+var _misuse_reported := false
 var _inertia_share := 0.5 ## engine inertia is reflected onto n driven wheels: 1/n each
 
 
@@ -82,6 +84,8 @@ func engine_torque() -> float:
 ## rear axle for RWD, the front axle for FWD, the rear axle for AWD with `wfl`, `wfr` the front.
 ## `brake` (0..1) and `speed` (signed forward m/s) drive the R/N/1 selection (#108).
 ## Non-AWD layouts only; AWD cars must use `step_awd` (the front wheel speeds are required there).
+## Misuse fallback: on an AWD layout this logs one error and drives the front wheels at the rear
+## wheel speeds instead of failing.
 func step(dt: float, throttle: float, wl: float, wr: float, brake := 0.0, speed := 0.0) -> void:
 	if def.layout == PowertrainDefinition.Layout.AWD:
 		# Release-safe guard (asserts are stripped): report once, then fall back to the AWD
@@ -97,11 +101,6 @@ func step_awd(dt: float, throttle: float, wl: float, wr: float, wfl: float, wfr:
 		brake := 0.0, speed := 0.0) -> void:
 	assert(def.layout == PowertrainDefinition.Layout.AWD, "step_awd() on a non-AWD powertrain")
 	_step(dt, throttle, wl, wr, brake, speed, wfl, wfr)
-
-
-## Set by tests to keep the expected misuse error out of CI logs.
-var silence_misuse_error := false
-var _misuse_reported := false
 
 
 func _report_misuse() -> void:

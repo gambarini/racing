@@ -3,6 +3,9 @@ extends GutTest
 ## cached/preallocated storage. GDScript has no allocation counter, so this asserts the
 ## structural properties (no Dictionary-returning call on the tick path, cached arrays are not
 ## rebuilt, buffers append in place) and that static memory stays flat over 600 ticks.
+## MEMORY_STATIC only catches retained growth: transient allocations that are freed within the
+## tick (the typical GDScript Dictionary/Array temporary) are invisible to it, so the structural
+## asserts above are the real guard and the memory checks are a backstop.
 
 const DT := 1.0 / 120.0
 const TICKS := 600

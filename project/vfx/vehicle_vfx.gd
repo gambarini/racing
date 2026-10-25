@@ -1,5 +1,5 @@
 ## Per-wheel surface VFX (#20): add as a child of a Vehicle. Reads wheel slip, surface weights and
-## speed (never writes sim state) and drives one CPUParticles3D per (wheel, surface) plus tyre marks.
+## speed (never writes sim state) and drives one GPUParticles3D per (wheel, surface) plus tyre marks.
 class_name VehicleVfx
 extends Node3D
 

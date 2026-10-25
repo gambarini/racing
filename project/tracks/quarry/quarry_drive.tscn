@@ -10,7 +10,6 @@
 [ext_resource type="PackedScene" path="res://camera/chase_camera.tscn" id="8_cam"]
 [ext_resource type="Script" path="res://audio/vehicle_audio.gd" id="9_aud"]
 [ext_resource type="Script" path="res://vfx/vehicle_vfx.gd" id="10_vfx"]
-
 [ext_resource type="Script" path="res://race/time_trial.gd" id="11_tt"]
 
 [node name="QuarryDrive" type="Node3D"]
