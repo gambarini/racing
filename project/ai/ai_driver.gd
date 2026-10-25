@@ -46,6 +46,7 @@ var speed_scale := 0.9
 var slip_target_deg := 8.0 ## (estimate, #28)
 var slip_span_deg := 6.0 ## throttle reaches 0 this far above the target
 var counter_gain := 1.0
+var range_compensation := true ## divide the steer command by the filter's speed range scale (#171)
 ## Pedal ramp like the player's keyboard (DriverInput.pedal_rate_*).
 var pedal_rate_up := 14.0
 var pedal_rate_down := 20.0
@@ -178,6 +179,10 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	if slip_active:
 		# steer toward the slide by the slip beyond the target, on top of the pursuit command
 		want = clampf(want + signf(slip_deg) * deg_to_rad(over) / max_steer_rad * counter_gain, -1.0, 1.0)
+	# SteeringFilter scales the command by its speed range; undo that so the wheel angle is the one
+	# pure pursuit asked for (#171: without it the front axle gets ~half the angle at 110 km/h).
+	if range_compensation:
+		want = clampf(want / SteeringFilter.range_scale(speed * 3.6), -1.0, 1.0)
 	_steer = SteeringFilter.step_steer(_steer, want, dt, speed * 3.6)
 	st.steer = _steer
 	# --- Speed: PI on the profile a little ahead ---
