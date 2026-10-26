@@ -30,7 +30,7 @@ func _main() -> void:
 	var max_ticks := 120 * 260
 	var ai := drive.start_ai(line, max_ticks)
 	ai.speed_scale = scale
-	for p in ["look_k", "look_min", "look_max", "kp", "ki", "brake_kp", "brake_deadband", "lead_time", "slip_target_deg", "slip_span_deg", "counter_gain", "grip_a_max", "grip_accel_ref", "grip_lead"]:
+	for p in ["look_k", "look_min", "look_max", "kp", "ki", "brake_kp", "brake_deadband", "lead_time", "slip_target_deg", "slip_span_deg", "counter_gain", "grip_a_max", "grip_accel_ref", "grip_lead", "course_gain", "course_max_deg"]:
 		var e := OS.get_environment("AI_" + String(p).to_upper())
 		if e != "":
 			ai.set(p, float(e))

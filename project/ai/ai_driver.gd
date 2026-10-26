@@ -51,6 +51,8 @@ var speed_scale := 0.9
 var slip_target_deg := 8.0 ## (estimate, #28)
 var slip_span_deg := 6.0 ## throttle reaches 0 this far above the target
 var counter_gain := 1.0
+var course_max_deg := 12.0
+var course_gain := 0.0 ## 0..1: how much of the rear slip angle the pursuit frame is rotated by (#187)
 ## Lateral-grip throttle cap (#187, friction ellipse): the corner's lateral demand v^2*kappa uses up
 ## part of the grip circle `grip_a_max` (m/s^2); only the remainder, sqrt(a_max^2 - a_lat^2), may go to
 ## driving, and the throttle is limited to that fraction of `grip_accel_ref` (full-throttle
@@ -206,6 +208,15 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	var f_len := maxf(sqrt(fwd.x * fwd.x + fwd.z * fwd.z), 1e-6)
 	var fx := fwd.x / f_len
 	var fz := fwd.z / f_len
+	if course_gain != 0.0:
+		# Pursue along the rear axle's actual course (heading rotated by the rear slip toward the right),
+		# not the heading: a crabbing car otherwise steers for a line it is not travelling along.
+		var ca := deg_to_rad(clampf(slip_deg, -course_max_deg, course_max_deg)) * course_gain * clampf((sp - 8.0) / 8.0, 0.0, 1.0)
+		var cs := sin(ca)
+		var cc := cos(ca)
+		var nfx := fx * cc - fz * cs
+		fz = fz * cc + fx * cs
+		fx = nfx
 	var along := dx * fx + dz * fz
 	var side := dx * -fz + dz * fx
 	var dist2 := maxf(along * along + side * side, 1e-4)
