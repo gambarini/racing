@@ -112,14 +112,14 @@ func test_slip_over_target_cuts_throttle_and_counter_steers() -> void:
 		var st := DriverInputState.new()
 		for i in 120:
 			ai.step(Vector3(0, 0, 0), Vector3(1, 0, 0), 12.0, slip, DT, st)
-		assert_true(ai.slip_active, "slip %.0f deg is over the 8 deg target" % slip)
+		assert_true(ai.slip_active, "slip %.0f deg is over the slip target" % slip)
 		assert_lt(st.throttle, s0.throttle * 0.5, "throttle reduced at slip %.0f" % slip)
 		assert_eq(signf(st.steer), signf(slip), "counter-steer toward the slide (SteeringFilter convention) at %.0f" % slip)
 	# Below the target nothing changes.
 	var calm := _driver()
 	var sc := DriverInputState.new()
 	for i in 120:
-		calm.step(Vector3(0, 0, 0), Vector3(1, 0, 0), 12.0, 6.0, DT, sc)
+		calm.step(Vector3(0, 0, 0), Vector3(1, 0, 0), 12.0, calm.slip_target_deg - 2.0, DT, sc)
 	assert_false(calm.slip_active)
 	assert_almost_eq(sc.throttle, s0.throttle, 1e-4)
 
@@ -196,3 +196,27 @@ func test_range_compensation_gives_the_pursuit_wheel_angle_at_speed() -> void:
 		off.step(Vector3(0, 0, -1), Vector3(1, 0, 0), speed, 0.0, DT, st_off)
 	assert_gt(st_off.steer, 0.0)
 	assert_almost_eq(st_on.steer / st_off.steer, 1.0 / SteeringFilter.range_scale(speed * 3.6), 0.02)
+
+
+func test_grip_throttle_cap_is_a_friction_ellipse() -> void:
+	var ai := _driver()
+	assert_almost_eq(ai.grip_throttle_cap(0.0), minf(ai.grip_a_max / ai.grip_accel_ref, 1.0), 1e-6, "no lateral demand: the whole budget drives")
+	assert_eq(ai.grip_throttle_cap(ai.grip_a_max), 0.0, "grip used up by cornering: no throttle")
+	assert_eq(ai.grip_throttle_cap(ai.grip_a_max * 2.0), 0.0)
+	var prev := 2.0
+	for i in 17:
+		var c := ai.grip_throttle_cap(float(i) * 0.5)
+		assert_true(c <= prev + 1e-9, "monotone non-increasing in lateral demand")
+		prev = c
+
+
+func test_grip_cap_limits_throttle_but_never_the_brake() -> void:
+	var ai := _driver()
+	ai.lateral_accel = ai.grip_a_max # the tyres are fully used laterally
+	var st := DriverInputState.new()
+	for i in 120:
+		ai.step(Vector3(12.0 + float(i) * 0.2, 0, -1), Vector3(1, 0, 0), 5.0, 0.0, DT, st)
+	assert_eq(st.throttle, 0.0, "throttle cut when no grip is left")
+	for i in 120:
+		ai.step(Vector3(12.0 + float(i) * 0.2, 0, -1), Vector3(1, 0, 0), 60.0, 0.0, DT, st)
+	assert_gt(st.brake, 0.0, "braking is not capped by the lateral demand")
