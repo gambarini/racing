@@ -49,6 +49,7 @@ func run(track: String, car: String, laps: int, max_seconds := MAX_SECONDS) -> D
 	var t0 := Time.get_ticks_msec()
 	var def := load(CAR_AWD if car == "awd" else CAR_RWD) as VehicleDefinition
 	var world: Node3D
+	var space := _new_space()
 	var v: Vehicle
 	var spline: TrackSpline
 	var line: RacingLine
@@ -58,7 +59,7 @@ func run(track: String, car: String, laps: int, max_seconds := MAX_SECONDS) -> D
 		drive.get_node("Vehicle/VehicleAudio").free()
 		drive.get_node("TimeTrial").ghost_path = "user://ai_lap_check_ghost.dat"
 		drive.get_node("TimeTrial").process_mode = Node.PROCESS_MODE_DISABLED # no ghost files: runs must be independent
-		tree.root.add_child(drive)
+		space.add_child(drive)
 		await tree.physics_frame
 		world = drive
 		v = drive.vehicle
@@ -74,7 +75,7 @@ func run(track: String, car: String, laps: int, max_seconds := MAX_SECONDS) -> D
 			return false
 	else:
 		world = (load(PROVING_GROUND) as PackedScene).instantiate()
-		tree.root.add_child(world)
+		space.add_child(world)
 		spline = make_pg_track()
 		world.add_child(spline)
 		line = make_pg_line()
@@ -147,9 +148,22 @@ func run(track: String, car: String, laps: int, max_seconds := MAX_SECONDS) -> D
 			"rejected_gates": timer.out_of_order_crossings, "off_track": off_events, "off_ticks": off_ticks,
 			"contacts": contacts[0], "resets": resets, "finished": timer.laps.size() >= laps,
 			"wall_ms": Time.get_ticks_msec() - t0}
-	world.queue_free()
+	space.queue_free()
 	await tree.physics_frame
 	return out
+
+
+## Every run lives in its own SubViewport with its own World3D, so its own physics space. Jolt orders
+## contact pairs by body id (index + reuse sequence number) and ids come from a per-space free list,
+## so bodies freed by an earlier run in a shared space change the contact order, and with it the last
+## bits of the solver result, of the next run (#179).
+func _new_space() -> SubViewport:
+	var sv := SubViewport.new()
+	sv.own_world_3d = true
+	sv.size = Vector2i(2, 2)
+	sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	tree.root.add_child(sv)
+	return sv
 
 
 ## Closed circle of the Proving Ground, counter-clockwise (left-hand) from its +X point, 8 gates.

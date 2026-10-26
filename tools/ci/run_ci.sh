@@ -38,7 +38,7 @@ fi
 
 # Sharding (#194): SHARD="i/n" (0-based i) runs only the steps assigned to shard i; unset runs all.
 # Heavy steps are pinned (measured wall seconds in parentheses), the rest go round-robin.
-# Import always runs. The ai_lap pair and its determinism compare stay together in shard 1.
+# Import always runs. 
 SHARD_I=0; SHARD_N=1
 if [ -n "${SHARD:-}" ]; then SHARD_I="${SHARD%/*}"; SHARD_N="${SHARD#*/}"; fi
 rr=0
@@ -48,7 +48,7 @@ in_shard() { # name -> 0 if this run should execute it
   case "$1" in
     import) want=$SHARD_I ;;                         # every shard imports
     ai_personality_check) want=0 ;;                  # (116)
-    ai_tactics_check|ai_lap_check_*) want=1 ;;       # (58) (27+27)
+    ai_tactics_check|ai_lap_check) want=1 ;;         # (58) (~55)
     tests|ai_driver_check|quarry_*) want=2 ;;        # (33) (38) (19+19+11+9)
     *) want=$((rr % SHARD_N)); rr=$((rr + 1)) ;;
   esac
@@ -128,19 +128,11 @@ fi
 run_step tests "$GODOT" --headless --path project -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
 for f in project/tests/*_check.gd project/tests/check_*.gd; do
   n="$(basename "$f" .gd)"
-  [ "$n" = "ai_lap_check" ] && continue  # run twice below (determinism)
+  [ "$n" = "ai_lap_check" ] && continue  # run below with its CSV output dir
   run_step "$n" "$GODOT" --headless --fixed-fps 120 --path project -s "res://tests/$n.gd"
 done
-# Headless AI lap test (#34): the whole test runs twice (two processes) and the lap CSVs must be
-# identical. CSVs land in $LOGDIR/ai_lap_1 and ai_lap_2 for archiving (~45 s each).
-for k in 1 2; do
-  AI_LAP_OUT="$LOGDIR/ai_lap_$k" run_step "ai_lap_check_$k" "$GODOT" --headless --fixed-fps 120 --path project -s res://tests/ai_lap_check.gd
-done
-if [ "$SHARD_N" -gt 1 ] && [ "$SHARD_I" -ne 1 ]; then :
-elif cmp -s "$LOGDIR/ai_lap_1/ai_lap_laps.csv" "$LOGDIR/ai_lap_2/ai_lap_laps.csv" && [ -s "$LOGDIR/ai_lap_1/ai_lap_laps.csv" ]; then
-  echo "PASS: ai_lap_check lap ticks identical across two runs"
-else
-  echo "STEP FAILED: ai_lap_check determinism (lap CSVs differ or missing)"; diff "$LOGDIR/ai_lap_1/ai_lap_laps.csv" "$LOGDIR/ai_lap_2/ai_lap_laps.csv" | head; rc=1
-fi
+# Headless AI lap test (#34): ai_lap_check runs every combo twice in ONE process and asserts identical
+# lap ticks (in-process determinism, #179). CSVs land in $LOGDIR/ai_lap for archiving (~55 s).
+AI_LAP_OUT="$LOGDIR/ai_lap" run_step ai_lap_check "$GODOT" --headless --fixed-fps 120 --path project -s res://tests/ai_lap_check.gd
 echo "== per-step wall time (s), slowest first =="; sort -rn "$TIMES"; echo "total: $SECONDS s"
 exit $rc
