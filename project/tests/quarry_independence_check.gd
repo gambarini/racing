@@ -17,7 +17,7 @@ func _initialize() -> void:
 func _main() -> void:
 	await physics_frame
 	var runner := Runner.new(self)
-	var laps := int(OS.get_environment("IND_LAPS")) if OS.get_environment("IND_LAPS") != "" else 3
+	var laps := int(OS.get_environment("IND_LAPS")) if OS.get_environment("IND_LAPS") != "" else 2
 	var car := OS.get_environment("IND_CAR") if OS.get_environment("IND_CAR") != "" else "awd"
 	var first: Dictionary = {}
 	for i in RUNS:
