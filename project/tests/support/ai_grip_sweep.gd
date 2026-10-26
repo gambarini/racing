@@ -63,7 +63,7 @@ func _main() -> void:
 			var yaw := drive.vehicle.angular_velocity.y
 			rows.append("%d,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.2f,%.2f" % [ticks, ai.s, ai.speed_now, ai.target_speed,
 					line.lane_offset_at(ai.s) - ai.cross_track, ai.cross_track, ai.rear_slip_deg, rad_to_deg(w[0].alpha),
-					w[0].steer_angle, w[0].fy + w[1].fy, w[2].fy + w[3].fy, yaw, line.curvature_at(ai.s), w[2].fx + w[3].fx, ai.throttle_out, ai.steer_out, ai.grip_cap_now])
+					w[0].steer_angle, w[0].fy + w[1].fy, w[2].fy + w[3].fy, yaw, line.curvature_at(ai.s), w[2].fx + w[3].fx, ai.throttle_out, ai.steer_out, ai.lat_cap_now])
 		if off_ticks > 1500:
 			break
 	print("RESULT skill %.3f scale %.2f: laps %d, max centre %.2f m at s=%.0f, off-road ticks %d, grass %d, ticks %d" % [

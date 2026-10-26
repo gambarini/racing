@@ -75,7 +75,7 @@ var rear_slip_deg := 0.0
 var slip_active := false
 var throttle_out := 0.0 ## throttle written this tick (debug / sweep tool)
 var steer_out := 0.0
-var grip_cap_now := 1.0 ## last lateral-grip throttle cap
+var lat_cap_now := 1.0 ## last lateral-grip throttle cap
 var tick := 0
 
 ## Telemetry (preallocated rows, no per-tick allocation while below capacity).
@@ -244,8 +244,8 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	if slip_active:
 		thr *= clampf(1.0 - over / slip_span_deg, 0.0, 1.0)
 	if grip_cap_enabled and thr > 0.0:
-		grip_cap_now = grip_throttle_cap(maxf(sp * sp * maxf(absf(line.curvature_at(s)), absf(line.curvature_at(s + grip_lead))), lateral_accel))
-		thr = minf(thr, grip_cap_now)
+		lat_cap_now = grip_throttle_cap(maxf(sp * sp * maxf(absf(line.curvature_at(s)), absf(line.curvature_at(s + grip_lead))), lateral_accel))
+		thr = minf(thr, lat_cap_now)
 	st.throttle = SteeringFilter.ramp(st.throttle, thr, dt, pedal_rate_up, pedal_rate_down)
 	st.brake = SteeringFilter.ramp(st.brake, brk, dt, pedal_rate_up, pedal_rate_down)
 	if st.throttle > 0.0 and st.brake > 0.0: # never both pedals
