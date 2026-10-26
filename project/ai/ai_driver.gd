@@ -51,6 +51,15 @@ var speed_scale := 0.9
 var slip_target_deg := 8.0 ## (estimate, #28)
 var slip_span_deg := 6.0 ## throttle reaches 0 this far above the target
 var counter_gain := 1.0
+## Lateral-grip throttle cap (#187, friction ellipse): the corner's lateral demand v^2*kappa uses up
+## part of the grip circle `grip_a_max` (m/s^2); only the remainder, sqrt(a_max^2 - a_lat^2), may go to
+## driving, and the throttle is limited to that fraction of `grip_accel_ref` (full-throttle
+## acceleration, m/s^2). Brakes are never capped. No per-track or per-skill special case.
+var grip_cap_enabled := true
+var grip_a_max := 9.0 ## m/s^2, usable combined grip (estimate: mu 1.1 * g, with margin)
+var grip_accel_ref := 6.5 ## m/s^2 (estimate: RacingLineParams.accel_max)
+var lateral_accel := 0.0 ## m/s^2, measured |sum of tyre lateral forces| / mass (set by drive(); 0 in unit tests)
+var grip_lead := 15.0 ## m, curvature is read this far ahead (the throttle is lifted before the turn-in)
 var range_compensation := true ## divide the steer command by the filter's speed range scale (#171)
 ## Pedal ramp like the player's keyboard (DriverInput.pedal_rate_*).
 var pedal_rate_up := 14.0
@@ -64,6 +73,9 @@ var target_speed := 0.0
 var cross_track := 0.0 ## m, signed, + = line is to the right of the car
 var rear_slip_deg := 0.0
 var slip_active := false
+var throttle_out := 0.0 ## throttle written this tick (debug / sweep tool)
+var steer_out := 0.0
+var grip_cap_now := 1.0 ## last lateral-grip throttle cap
 var tick := 0
 
 ## Telemetry (preallocated rows, no per-tick allocation while below capacity).
@@ -155,6 +167,7 @@ func drive(v: Vehicle, st: DriverInputState, dt: float) -> void:
 	var speed := vel.x * fwd.x + vel.y * fwd.y + vel.z * fwd.z
 	# Signed rear slip angle in degrees (mean of the rear wheels, + = travelling toward the right).
 	var slip := rad_to_deg(0.5 * (v.wheels[2].alpha + v.wheels[3].alpha))
+	lateral_accel = absf(v.wheels[0].fy + v.wheels[1].fy + v.wheels[2].fy + v.wheels[3].fy) / v.mass
 	step(xf.origin, fwd, speed, slip, dt, st)
 
 
@@ -230,6 +243,9 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	var brk := maxf(-t, 0.0)
 	if slip_active:
 		thr *= clampf(1.0 - over / slip_span_deg, 0.0, 1.0)
+	if grip_cap_enabled and thr > 0.0:
+		grip_cap_now = grip_throttle_cap(maxf(sp * sp * maxf(absf(line.curvature_at(s)), absf(line.curvature_at(s + grip_lead))), lateral_accel))
+		thr = minf(thr, grip_cap_now)
 	st.throttle = SteeringFilter.ramp(st.throttle, thr, dt, pedal_rate_up, pedal_rate_down)
 	st.brake = SteeringFilter.ramp(st.brake, brk, dt, pedal_rate_up, pedal_rate_down)
 	if st.throttle > 0.0 and st.brake > 0.0: # never both pedals
@@ -238,6 +254,8 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 		else:
 			st.brake = 0.0
 	st.handbrake = false
+	throttle_out = st.throttle
+	steer_out = st.steer
 	# cross track (+ = line to the right of the car), at the car's own s
 	var p0 := line.point_at(s)
 	var tg := line.tangent_at(s)
@@ -258,6 +276,14 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 		telemetry[o + 10] = slip_deg
 		telemetry_rows += 1
 	tick += 1
+
+
+## Largest throttle (0..1) the lateral demand v^2*kappa leaves free (friction ellipse, #187).
+func grip_throttle_cap(a_lat: float) -> float:
+	var free := grip_a_max * grip_a_max - a_lat * a_lat
+	if free <= 0.0:
+		return 0.0
+	return clampf(sqrt(free) / grip_accel_ref, 0.0, 1.0)
 
 
 ## Mistake generator (#30): at `personality.mistake_rate()` per second the driver lifts, cutting the
