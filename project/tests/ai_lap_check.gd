@@ -41,7 +41,7 @@ static func stats(times: Array) -> Dictionary:
 
 ## Strict XFAIL (design ruling on PR #180, tied to #178): only the incident gates (wrong-way, rejected
 ## gates, off-track) of these combos are expected to fail. Quarry RWD lap 1 (standing start) leaves the
-## road today; #178 tracks the AI fix, #179 the in-process run drift. Everything else (completion, flying-lap
+## road today; #178 tracks the AI fix. Everything else (completion, flying-lap
 ## bounds, std-dev, CSV, determinism in run_ci.sh) stays enforced. When the gates pass, this check FAILS
 ## until the entry is removed.
 const XFAIL := [] ## #178 fixed by #171 (steer range compensation): quarry/rwd passes the gates now
@@ -62,10 +62,6 @@ func _main() -> void:
 	var laps := int(OS.get_environment("AI_LAPS")) if OS.get_environment("AI_LAPS") != "" else 3
 	var only := OS.get_environment("AI_COMBO") ## debug filter, e.g. "quarry/rwd"
 	var runner := Runner.new(self)
-	# The first run in a process differs slightly from later ones (lazy engine/resource setup), so
-	# a short discarded warm-up run on each track comes first; the reported pass is then reproducible.
-	await runner.run("quarry", "rwd", 1)
-	await runner.run("proving_ground", "rwd", 1)
 	var results: Dictionary = await _run_pass(runner, laps, only)
 	var csv_laps := "track,car,lap,ticks,seconds\n"
 	var csv_sum := "track,car,laps,best,mean,std,flying_std,wrong_way,rejected_gates,off_track,contacts,resets,wall_s\n"
@@ -119,9 +115,9 @@ func _main() -> void:
 	_write(p_laps, csv_laps)
 	_write(p_sum, csv_sum)
 	print("CSV: ", ProjectSettings.globalize_path(p_laps), " and ", ProjectSettings.globalize_path(p_sum))
-	# Optional in-process second pass (AI_DET=1). Not the default: in the Quarry the lap ticks drift by
-	# 1-2 ticks with the run index inside one process (follow-up issue), so CI compares two processes.
-	if OS.get_environment("AI_DET") != "":
+	# In-process second pass: every run lives in its own physics space (ai_lap_runner), so the lap ticks
+	# must be bit-identical (#179; the run index used to drift them by 1-2 ticks). AI_DET=0 skips it.
+	if OS.get_environment("AI_DET") != "0":
 		var again: Dictionary = await _run_pass(runner, laps, only)
 		for key: String in results:
 			total_wall += again[key].wall_ms
