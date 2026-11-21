@@ -77,7 +77,7 @@ START=$SECONDS
 # Wall-clock-sensitive checks: a failure is retried once and logged as RETRY, so a load spike (or the
 # 3 parallel shards sharing 4 vCPUs, #198) doesn't fail the absolute-time gates. This applies inside
 # shards and on GitHub CI too: the retry only costs time when the first attempt failed.
-TIMING_STEPS=" quarry_timetrial_check telemetry_check surface_cache_timing_check "
+TIMING_STEPS=" quarry_timetrial_check telemetry_check surface_cache_timing_check terrain_alloc_check "
 
 run_once() { # tag, name, log, command...  (tag: "STEP FAILED", or "ATTEMPT FAILED" before a retry)
   local tag="$1" name="$2" log="$3"; shift 3
