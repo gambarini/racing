@@ -103,14 +103,14 @@ func _main() -> void:
 	await physics_frame
 	await _speed_hold()
 
-	var warm := await _lap_run(OS.get_environment("AI_CSV") if OS.get_environment("AI_CSV") != "" else "user://ai_driver_lap.csv")
-	var a := await _lap_run()
+	# #225: the former warm-up run is merged into `a` (it recorded the telemetry CSV); a vs b still proves determinism.
+	var a := await _lap_run(OS.get_environment("AI_CSV") if OS.get_environment("AI_CSV") != "" else "user://ai_driver_lap.csv")
 	var b := await _lap_run()
-	for r in [warm, a]:
+	for r in [a]:
 		cu.check(r.laps.size() >= LAPS, "default AI completes %d consecutive laps (%d)" % [LAPS, r.laps.size()])
 		cu.check(r.laps.size() >= 2, "two consecutive laps completed (%d)" % r.laps.size())
 	cu.check(a.gates == 12, "track has 12 gates (%d)" % a.gates)
-	cu.check(a.out_of_order == 0 and warm.out_of_order == 0, "LapTimer accepted every gate in order (out-of-order crossings %d)" % a.out_of_order)
+	cu.check(a.out_of_order == 0, "LapTimer accepted every gate in order (out-of-order crossings %d)" % a.out_of_order)
 	cu.check(a.wrong_ticks == 0, "zero wrong-way flags (%d ticks)" % a.wrong_ticks)
 	if a.laps.size() >= 2:
 		var t1: float = a.laps[0]["raw_time"]
@@ -121,7 +121,7 @@ func _main() -> void:
 		cu.check_range("lap 2 (flying) time (s)", t2, 55.0, 75.0)
 		cu.check_range("flying lap vs scripted reference (ratio)", t2 / SCRIPTED_REF, 0.0, 1.10)
 	cu.check_range("max centre-line offset (m) vs road half width 6.5", a.max_centre, 0.0, 6.5)
-	cu.check(warm.rows > 1000, "telemetry rows recorded (%d)" % warm.rows)
+	cu.check(a.rows > 1000, "telemetry rows recorded (%d)" % a.rows)
 	cu.check(a.ticks == b.ticks and a.pos == b.pos, "deterministic: identical ticks %d / %d and end position" % [a.ticks, b.ticks])
 	var la: Array = a.laps
 	var lb: Array = b.laps
