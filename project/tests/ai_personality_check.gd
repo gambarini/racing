@@ -19,7 +19,7 @@ const ROAD_HALF := 6.5
 const FIELD := 8
 const FIELD_LAPS := 4
 const FIELD_SEED := 2026
-const SPREAD_MIN := 0.5 ## s (estimate)
+const SPREAD_MIN := 0.3 ## s (estimate; measured 0.43..0.73 s on Linux/macOS for the same personalities, #223)
 const SPREAD_MAX := 4.0 ## s (estimate)
 const MAX_STRANDED := 1 ## field cars allowed to set no lap after being punted into a trap (#223)
 
