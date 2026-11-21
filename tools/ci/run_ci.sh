@@ -47,9 +47,9 @@ in_shard() { # name -> 0 if this run should execute it
   local want
   case "$1" in
     import) want=$SHARD_I ;;                         # every shard imports
-    ai_personality_check) want=0 ;;                  # (116)
-    ai_tactics_check|ai_lap_check) want=1 ;;         # (58) (~55)
-    tests|ai_driver_check|quarry_*) want=2 ;;        # (33) (38) (20+20+12+12+9)
+    ai_personality_check) want=0 ;;                  # (111)
+    ai_tactics_check|ai_lap_check) want=1 ;;         # (85) (47)
+    tests|ai_driver_check|quarry_*) want=2 ;;        # (33) (32) (20+19+13+12+9)
     *) want=$((rr % SHARD_N)); rr=$((rr + 1)) ;;
   esac
   [ $((want % SHARD_N)) -eq "$SHARD_I" ]
@@ -62,7 +62,7 @@ in_shard() { # name -> 0 if this run should execute it
 # 10-min workflow timeout) bounds the whole run's wall time (lock waiting excluded).
 BUDGET_DEFAULT="${CI_BUDGET_DEFAULT:-45}"
 CEILING="${CI_TOTAL_CEILING:-480}"
-BUDGET_TABLE=" import=60 tests=90 ai_personality_check=420 ai_tactics_check=330 ai_lap_check=140 ai_driver_check=125 "
+BUDGET_TABLE=" import=60 tests=60 ai_personality_check=200 ai_tactics_check=140 ai_lap_check=80 ai_driver_check=60 track_limits_drive_check=12 "
 budget_for() { # name -> seconds
   local name="$1" kv
   local ov="${CI_BUDGET_OVERRIDE:-}"; for kv in ${ov//,/ }; do
