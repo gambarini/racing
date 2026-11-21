@@ -205,15 +205,15 @@ func check_cues(v: Vehicle, vis: VehicleVisual) -> void:
 		check(e.r > 0.9 and e.g < 0.2 and e.b < 0.2, n + " emission red")
 	var se := emission_of(ns)
 	check(se.r < 0.3 and se.b > 0.5, "nose stripe colour (cyan) not used at the rear")
-	check(vis.tail_material.emission_energy_multiplier == VehicleVisual.TAIL_IDLE_ENERGY, "tail idle energy")
+	check(is_equal_approx(vis.tail_material.emission_energy_multiplier, VehicleVisual.TAIL_IDLE_ENERGY), "tail idle energy")
 	v.brake = 0.8
 	vis.advance(0.0)
 	var on := vis.tail_material.emission_energy_multiplier
 	check(on >= 3.0 * VehicleVisual.TAIL_IDLE_ENERGY, "brake > 0.5 energy %.2f >= 3x idle" % on)
 	v.brake = 0.0
 	vis.advance(0.0)
-	check(vis.tail_material.emission_energy_multiplier == VehicleVisual.TAIL_IDLE_ENERGY, "released returns to idle")
+	check(is_equal_approx(vis.tail_material.emission_energy_multiplier, VehicleVisual.TAIL_IDLE_ENERGY), "released returns to idle")
 	for w in v.wheels:
 		w.omega = -20.0
 	vis.advance(0.0)
-	check(vis.tail_material.emission_energy_multiplier == VehicleVisual.TAIL_IDLE_ENERGY, "reverse wheel spin does not light the brake lights")
+	check(is_equal_approx(vis.tail_material.emission_energy_multiplier, VehicleVisual.TAIL_IDLE_ENERGY), "reverse wheel spin does not light the brake lights")
