@@ -223,27 +223,20 @@ func test_grip_cap_limits_throttle_but_never_the_brake() -> void:
 
 
 ## #203: the course-correction term acts on the lateral error, toward the line, only off the throttle.
+## The steering filter rate-limits one tick, so each driver steps 60 ticks with the pedal held at `thr`.
+func _crab_steer(gain: float, z: float, thr: float) -> float:
+	var ai := _driver()
+	ai.crab_ct_gain = gain
+	var st := DriverInputState.new()
+	for i in 60:
+		st.throttle = thr
+		ai.step(Vector3(0, 0, z), Vector3(1, 0, 0), 30.0, 0.0, DT, st)
+	return st.steer
+
+
 func test_crab_correction_is_toward_the_line_and_fades_with_the_throttle() -> void:
-	var off := _driver()
-	off.crab_ct_gain = 0.0
-	var on := _driver()
-	var st_off := DriverInputState.new()
-	var st_on := DriverInputState.new()
-	off.step(Vector3(0, 0, -4), Vector3(1, 0, 0), 30.0, 0.0, DT, st_off)
-	on.step(Vector3(0, 0, -4), Vector3(1, 0, 0), 30.0, 0.0, DT, st_on)
-	assert_gt(st_on.steer, st_off.steer, "line is to the right: more right steer than pure pursuit")
-	var on_l := _driver()
-	var st_l := DriverInputState.new()
-	on_l.step(Vector3(0, 0, 4), Vector3(1, 0, 0), 30.0, 0.0, DT, st_l)
-	assert_almost_eq(st_l.steer, -st_on.steer, 1e-4, "symmetric")
-	# Throttle pedal already down: the term is faded out and the steer equals the gain-0 steer.
-	var on_t := _driver()
-	var off_t := _driver()
-	off_t.crab_ct_gain = 0.0
-	var st_a := DriverInputState.new()
-	var st_b := DriverInputState.new()
-	st_a.throttle = 1.0
-	st_b.throttle = 1.0
-	on_t.step(Vector3(0, 0, -4), Vector3(1, 0, 0), 30.0, 0.0, DT, st_a)
-	off_t.step(Vector3(0, 0, -4), Vector3(1, 0, 0), 30.0, 0.0, DT, st_b)
-	assert_almost_eq(st_a.steer, st_b.steer, 1e-6, "no correction on the throttle")
+	var off := _crab_steer(0.0, -4.0, 0.0)
+	var on := _crab_steer(1.0, -4.0, 0.0)
+	assert_gt(on, off + 0.005, "line is to the right: more right steer than pure pursuit")
+	assert_almost_eq(_crab_steer(1.0, 4.0, 0.0), -on, 1e-4, "symmetric")
+	assert_almost_eq(_crab_steer(1.0, -4.0, 1.0), _crab_steer(0.0, -4.0, 1.0), 1e-6, "no correction on the throttle")
