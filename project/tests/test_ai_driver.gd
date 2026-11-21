@@ -220,3 +220,23 @@ func test_grip_cap_limits_throttle_but_never_the_brake() -> void:
 	for i in 120:
 		ai.step(Vector3(12.0 + float(i) * 0.2, 0, -1), Vector3(1, 0, 0), 60.0, 0.0, DT, st)
 	assert_gt(st.brake, 0.0, "braking is not capped by the lateral demand")
+
+
+## #203: the course-correction term acts on the lateral error, toward the line, only off the throttle.
+## The steering filter rate-limits one tick, so each driver steps 60 ticks with the pedal held at `thr`.
+func _crab_steer(gain: float, z: float, thr: float) -> float:
+	var ai := _driver()
+	ai.crab_ct_gain = gain
+	var st := DriverInputState.new()
+	for i in 60:
+		st.throttle = thr
+		ai.step(Vector3(0, 0, z), Vector3(1, 0, 0), 30.0, 0.0, DT, st)
+	return st.steer
+
+
+func test_crab_correction_is_toward_the_line_and_fades_with_the_throttle() -> void:
+	var off := _crab_steer(0.0, -4.0, 0.0)
+	var on := _crab_steer(1.0, -4.0, 0.0)
+	assert_gt(on, off + 0.005, "line is to the right: more right steer than pure pursuit")
+	assert_almost_eq(_crab_steer(1.0, 4.0, 0.0), -on, 1e-4, "symmetric")
+	assert_almost_eq(_crab_steer(1.0, -4.0, 1.0), _crab_steer(0.0, -4.0, 1.0), 1e-6, "no correction on the throttle")

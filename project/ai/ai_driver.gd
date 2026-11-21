@@ -60,6 +60,16 @@ var grip_a_max := 8.0 ## m/s^2, usable combined grip (tuned #187; the tyre peak 
 var grip_accel_ref := 6.5 ## m/s^2 (estimate: RacingLineParams.accel_max)
 var lateral_accel := 0.0 ## m/s^2, measured |sum of tyre lateral forces| / mass (set by drive(); 0 in unit tests)
 var grip_lead := 15.0 ## m, curvature is read this far ahead (the throttle is lifted before the turn-in)
+## Course correction (#203): pure pursuit steers the HEADING toward the look-ahead point, so a car
+## that slides sideways under braking (crab drift: it points at the line while its velocity points
+## outside) is "satisfied" at 4-8 m cross-track error and a steer command of ~ -0.05. This adds a
+## Stanley-style term on the lateral error itself, atan(crab_ct_gain * error / (speed + crab_soft)),
+## error = car-to-(lane offset) line distance at the car's own s. It is faded out by the throttle
+## pedal (weight 1 - crab_throttle_k * throttle, so it acts off the throttle, i.e. braking/coasting)
+## because with the throttle on the grip cap and the slip logic already own the car. 0 = off.
+var crab_ct_gain := 0.3
+var crab_soft := 3.0 ## m/s
+var crab_throttle_k := 5.0
 var range_compensation := true ## divide the steer command by the filter's speed range scale (#171)
 ## Pedal ramp like the player's keyboard (DriverInput.pedal_rate_*).
 var pedal_rate_up := 14.0
@@ -75,6 +85,7 @@ var rear_slip_deg := 0.0
 var slip_active := false
 var throttle_out := 0.0 ## throttle written this tick (debug / sweep tool)
 var steer_out := 0.0
+var brake_out := 0.0 ## brake written this tick (debug / sweep tool)
 var lat_cap_now := 1.0 ## last lateral-grip throttle cap
 var tick := 0
 
@@ -220,6 +231,11 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 	if slip_active:
 		# steer toward the slide by the slip beyond the target, on top of the pursuit command
 		want = clampf(want + signf(slip_deg) * deg_to_rad(over) / max_steer_rad * counter_gain, -1.0, 1.0)
+	if crab_ct_gain > 0.0:
+		var w_off := clampf(1.0 - st.throttle * crab_throttle_k, 0.0, 1.0)
+		if w_off > 0.0:
+			var e_ct := cross_track_at(pos) + lane_now
+			want = clampf(want + atan(crab_ct_gain * e_ct / (sp + crab_soft)) * w_off / max_steer_rad, -1.0, 1.0)
 	# SteeringFilter scales the command by its speed range; undo that so the wheel angle is the one
 	# pure pursuit asked for (#171: without it the front axle gets ~half the angle at 110 km/h).
 	if range_compensation:
@@ -255,11 +271,10 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 			st.brake = 0.0
 	st.handbrake = false
 	throttle_out = st.throttle
+	brake_out = st.brake
 	steer_out = st.steer
 	# cross track (+ = line to the right of the car), at the car's own s
-	var p0 := line.point_at(s)
-	var tg := line.tangent_at(s)
-	cross_track = (p0.x - pos.x) * -tg.z + (p0.z - pos.z) * tg.x
+	cross_track = cross_track_at(pos)
 	lane_error = -cross_track - lane_now
 	if telemetry_enabled and telemetry_rows < telemetry_capacity:
 		var o := telemetry_rows * COLS.size()
@@ -276,6 +291,13 @@ func step(pos: Vector3, fwd: Vector3, speed: float, slip_deg: float, dt: float, 
 		telemetry[o + 10] = slip_deg
 		telemetry_rows += 1
 	tick += 1
+
+
+## Signed lateral distance (m, + = line to the right of the car) at the car's own s.
+func cross_track_at(pos: Vector3) -> float:
+	var p0 := line.point_at(s)
+	var tg := line.tangent_at(s)
+	return (p0.x - pos.x) * -tg.z + (p0.z - pos.z) * tg.x
 
 
 ## Largest throttle (0..1) the lateral demand v^2*kappa leaves free (friction ellipse, #187).
