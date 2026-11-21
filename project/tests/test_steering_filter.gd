@@ -106,3 +106,24 @@ func test_assist_leaves_steer_away_from_slide_and_small_steer() -> void:
 	out = SteeringFilter.counter_steer_assist(0.1, 20.0, true)
 	assert_eq(out["steer"], 0.1)
 	assert_false(out["active"])
+
+
+## #215: stick inside the deadzone is exactly 0, both signs, through the full pipeline.
+func test_stick_inside_deadzone_is_exactly_zero() -> void:
+	for x in [0.0, 0.01, 0.1, 0.15, -0.01, -0.1, -0.15]:
+		assert_eq(SteeringFilter.shape_stick(x), 0.0, "stick %s" % x)
+		assert_eq(SteeringFilter.step_steer(0.0, SteeringFilter.shape_stick(x), DT, 60.0), 0.0)
+
+
+## #215: stick back to centre leaves no residue: the filter reaches exactly 0 and stays there.
+func test_stick_return_to_centre_leaves_no_residue() -> void:
+	for speed in [0.0, 60.0, 150.0, 250.0]:
+		var v := 1.0
+		for i in 120:
+			v = SteeringFilter.step_steer(v, SteeringFilter.shape_stick(0.0), DT, speed)
+		assert_eq(v, 0.0, "speed %s" % speed)
+		# A stick that springs back to a small non-zero rest value (worn pot) is inside the deadzone.
+		v = 0.8
+		for i in 120:
+			v = SteeringFilter.step_steer(v, SteeringFilter.shape_stick(0.08), DT, speed)
+		assert_eq(v, 0.0, "worn-pot rest, speed %s" % speed)
