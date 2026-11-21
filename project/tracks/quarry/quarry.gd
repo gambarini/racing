@@ -88,7 +88,7 @@ const FEATURES := [
 ## beyond it; baked into the terrain vertex colours. quarry_check asserts luminance/hue separation.
 const SURFACE_COLORS := {
 	&"tarmac": Color(0.12, 0.12, 0.13), &"dirt": Color(0.66, 0.48, 0.28), &"gravel": Color(0.80, 0.78, 0.72),
-	&"mud": Color(0.16, 0.10, 0.06), &"grass": Color(0.12, 0.26, 0.07),
+	&"mud": Color(0.16, 0.10, 0.06), &"grass": Color(0.18, 0.38, 0.12),
 }
 const OFFROAD_COLOR := Color(0.46, 0.41, 0.35)
 

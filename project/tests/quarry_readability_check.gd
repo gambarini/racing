@@ -17,6 +17,13 @@ func _initialize() -> void:
 	_main()
 
 
+## WCAG-style contrast ratio of two colours' relative luminances: (Lmax + 0.05) / (Lmin + 0.05).
+static func _ratio(a: Color, b: Color) -> float:
+	var la := _lum(a)
+	var lb := _lum(b)
+	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
+
+
 static func _lum(c: Color) -> float:
 	var l := c.srgb_to_linear()
 	return 0.2126 * l.r + 0.7152 * l.g + 0.0722 * l.b
@@ -42,9 +49,7 @@ func _colours() -> void:
 		if id == &"grass":
 			continue
 		var c: Color = Quarry.SURFACE_COLORS[id]
-		var a := _lum(c)
-		var b := _lum(grass)
-		var ratio := maxf(a, b) / minf(a, b)
+		var ratio := _ratio(c, grass)
 		worst = minf(worst, ratio)
 		var achromatic := c.s < 0.15 and grass.s > 0.4
 		var dh := absf(c.h - grass.h)
@@ -52,7 +57,7 @@ func _colours() -> void:
 		cu.check(achromatic or dh >= 0.08, "%s hue differs from the verge (dh %.2f, s %.2f)" % [id, dh, c.s])
 	cu.check_range("worst road surface vs verge luminance ratio", worst, 1.5, 1e6)
 	var off := Quarry.OFFROAD_COLOR
-	cu.check(absf(_lum(off) - _lum(grass)) / _lum(grass) >= 0.5 or absf(off.h - grass.h) >= 0.08, "off-road colour differs from the verge")
+	cu.check(_ratio(off, grass) >= 1.5 or absf(off.h - grass.h) >= 0.08, "off-road colour differs from the verge")
 	# Baked terrain vertex colours: road centre vs the verge 3 m beyond the edge, along the lap.
 	var t := q.terrain
 	cu.check(t.vertex_colors.size() == t.n * t.n, "terrain carries per-vertex colours")
@@ -73,7 +78,7 @@ func _colours() -> void:
 			if _near_joker(v):
 				continue
 			var vc := _vcol_at(v.x, v.z)
-			var rr := maxf(_lum(roadc), _lum(vc)) / minf(_lum(roadc), _lum(vc))
+			var rr := _ratio(roadc, vc)
 			if rr < 1.5:
 				print("INFO: low ratio %.2f at s %.0f side %d road %s verge %s" % [rr, i * 10.0, side, roadc, vc])
 			rmin = minf(rmin, rr)
@@ -113,59 +118,132 @@ func _xf(node_name: String, k: int) -> Transform3D:
 	return (q.markers.xforms[node_name] as Array[Transform3D])[k]
 
 
-## Spacing (m) between consecutive instances k, k+2, ... (one side); `wrap` closes the loop.
-func _side_gaps(mm: MultiMesh, side: int, wrap: bool) -> PackedFloat32Array:
-	var pts: Array[Vector3] = []
-	for k in range(side, mm.instance_count, 2):
-		pts.append(_xf(String(mm.get_meta(&"n")), k).origin)
-	var out := PackedFloat32Array()
-	for i in pts.size() - 1:
-		out.append(pts[i].distance_to(pts[i + 1]))
-	if wrap:
-		out.append(pts[-1].distance_to(pts[0]))
-	return out
+## True when p (x, z) is on the road of the main route or the joker detour (half-width + margin).
+func _on_road(p: Vector2, margin: float) -> bool:
+	for i in q._xz.size():
+		if p.distance_to(q._xz[i]) < q.road_half(q._ss[i]) + margin:
+			return true
+	for k in q.joker_xz.size():
+		if p.distance_to(q.joker_xz[k]) < Quarry.JOKER_HALF + margin:
+			return true
+	return false
 
 
 func _edges() -> void:
-	var len := q.track.length()
-	for name in ["EdgePostsMain", "EdgeLinesMain", "EdgePostsJoker", "EdgeLinesJoker"]:
-		var mm := _mm(name)
-		var main: bool = name.ends_with("Main")
+	var edge_pts := {} # route -> Array[Vector2] of the real edge (not covered by the other route), every 3 m
+	for route in [&"main", &"joker"]:
+		var xz: PackedVector2Array = q._xz if route == &"main" else q.joker_xz
+		var ss: PackedFloat32Array = q._ss if route == &"main" else q.joker_s
+		var pts: Array[Vector2] = []
+		var next := 0.0
+		for i in xz.size():
+			if ss[i] < next:
+				continue
+			next = ss[i] + 3.0
+			var f := (xz[(i + 1) % xz.size()] - xz[maxi(i - 1, 0) if route == &"joker" else (i + xz.size() - 1) % xz.size()]).normalized()
+			var hw := q.road_half(ss[i]) if route == &"main" else Quarry.JOKER_HALF
+			for side in [-1.0, 1.0]:
+				var e: Vector2 = xz[i] + Vector2(-f.y, f.x) * side * hw
+				# exposed edge = outside the other route's road (the roads overlap where the detour branches off)
+				var other_hit := false
+				if route == &"main":
+					for k in q.joker_xz.size():
+						other_hit = other_hit or e.distance_to(q.joker_xz[k]) < Quarry.JOKER_HALF + 4.0
+				else:
+					for j in q._xz.size():
+						other_hit = other_hit or e.distance_to(q._xz[j]) < q.road_half(q._ss[j]) + 4.0
+				if not other_hit:
+					pts.append(e)
+		edge_pts[route] = pts
+	var overlap_total := 0
+	for route in [&"main", &"joker"]:
+		var posts_name := "EdgePostsMain" if route == &"main" else "EdgePostsJoker"
+		var posts: Array[Transform3D] = q.markers.xforms[posts_name]
 		var worst := 0.0
-		for side in 2:
-			var gaps := _side_gaps(mm, side, main)
-			cu.check(gaps.size() >= 2, "%s side %d has markers (%d gaps)" % [name, side, gaps.size()])
-			for g in gaps:
-				worst = maxf(worst, g)
-		cu.check_range("%s max spacing, both sides (m)" % name, worst, 0.0, MAX_SPACING)
-		var expect := ceili((len if main else q.joker_length) / MAX_SPACING)
-		cu.check(mm.instance_count >= 2 * expect, "%s count %d >= 2 x %d (one per 12 m per side)" % [name, mm.instance_count, expect])
-	# Lateral placement: posts sit outside the road edge on their own side, lines just inside it.
-	var bad := 0
-	for pair in [["EdgePostsMain", 0.3, 1.5], ["EdgeLinesMain", -0.8, 0.0]]:
-		var mm := _mm(pair[0])
-		for k in mm.instance_count:
-			var o := _xf(pair[0], k).origin
+		var uncovered := 0
+		for e: Vector2 in edge_pts[route]:
 			var best := 1e9
-			var lat := 0.0
-			var bs := 0.0
-			for i in range(0, q._xz.size(), 2):
-				var d := Vector2(o.x, o.z).distance_to(q._xz[i])
-				if d < best:
-					best = d
-					bs = q._ss[i]
-					var f := (q._xz[(i + 1) % q._xz.size()] - q._xz[i]).normalized()
-					lat = (Vector2(o.x, o.z) - q._xz[i]).dot(Vector2(-f.y, f.x))
-			var out := absf(lat) - q.road_half(bs)
-			var want_side := -1.0 if k % 2 == 0 else 1.0
-			if lat * want_side <= 0.0 or out < pair[1] - 0.3 or out > pair[2] + 0.3:
-				bad += 1
-	cu.check(bad == 0, "every main-route post/line is on its own side at the expected offset (%d off)" % bad)
-	var jm := _mm("EdgePostsJoker")
-	var first := _xf("EdgePostsJoker", 0).origin
-	var last := _xf("EdgePostsJoker", jm.instance_count - 2).origin
-	cu.check(Vector2(first.x, first.z).distance_to(q.joker_xz[0]) < Quarry.JOKER_HALF + 2.0, "joker posts start at the detour entry")
-	cu.check(Vector2(last.x, last.z).distance_to(q.joker_xz[q.joker_xz.size() - 1]) < Quarry.JOKER_HALF + 2.0, "joker posts end at the rejoin")
+			for xf in posts:
+				best = minf(best, e.distance_to(Vector2(xf.origin.x, xf.origin.z)))
+			worst = maxf(worst, best)
+			if best > MAX_SPACING / 2.0 + 1.0: # a post within 12 m means every point is within ~7 m of one
+				uncovered += 1
+		print("INFO: %s: %d posts, exposed edge points %d, farthest edge point from a post %.1f m" % [route, posts.size(), (edge_pts[route] as Array).size(), worst])
+		cu.check(uncovered == 0, "%s road: every exposed edge point (left and right) is within %.1f m of a post (%d uncovered)" % [route, MAX_SPACING / 2.0 + 1.0, uncovered])
+		cu.check(posts.size() >= (edge_pts[route] as Array).size() / 4, "%s road: post count %d is at least one per 12 m per side" % [route, posts.size()])
+		# consecutive posts of the same side along the route never more than 12 m apart (gaps across the
+		# overlap with the other route are the only allowed exceptions)
+		var sides: Array = q.markers.edge_sides[posts_name]
+		var big_gaps := 0
+		for side in [-1.0, 1.0]:
+			var prev := Vector3.INF
+			for k in posts.size():
+				if float(sides[k]) != side:
+					continue
+				var o := posts[k].origin
+				if prev != Vector3.INF and prev.distance_to(o) > MAX_SPACING:
+					# allowed only when the segment between them is covered by the other route's road
+					var mid := Vector2((prev.x + o.x) * 0.5, (prev.z + o.z) * 0.5)
+					if not _on_road(mid, 0.5) and not _on_road(Vector2(prev.x, prev.z).lerp(Vector2(o.x, o.z), 0.25), 0.5):
+						big_gaps += 1
+						printerr("gap %.1f m after post at %s" % [prev.distance_to(o), prev])
+				prev = o
+		cu.check(big_gaps == 0, "%s posts: no gap > 12 m on an exposed edge (%d)" % [route, big_gaps])
+	# Line strips: the same coverage on the exposed main edge, every <= LINE_STEP + 2 m.
+	var lines: Array[Transform3D] = q.markers.xforms["EdgeLinesMain"]
+	var line_gap := 0.0
+	for e: Vector2 in edge_pts[&"main"]:
+		var best := 1e9
+		for xf in lines:
+			best = minf(best, e.distance_to(Vector2(xf.origin.x, xf.origin.z)))
+		line_gap = maxf(line_gap, best)
+	cu.check_range("main edge line: farthest exposed edge point from a strip centre (m)", line_gap, 0.0, 6.0)
+	# No marker stands on a drivable surface; edge lines are not inside the other route's road.
+	var on_road := 0
+	for node_name in ["EdgePostsMain", "EdgePostsJoker"]:
+		for xf: Transform3D in q.markers.xforms[node_name]:
+			if _on_road(Vector2(xf.origin.x, xf.origin.z), 0.2):
+				on_road += 1
+	for xf: Transform3D in q.markers.xforms["CornerBoards"]:
+		if _on_road(Vector2(xf.origin.x, xf.origin.z), 0.2):
+			on_road += 1
+	cu.check(on_road == 0, "no post or board stands on a road (%d on a road)" % on_road)
+	var line_on_other := 0
+	for xf: Transform3D in q.markers.xforms["EdgeLinesMain"]:
+		var p := Vector2(xf.origin.x, xf.origin.z)
+		for k in q.joker_xz.size():
+			if p.distance_to(q.joker_xz[k]) < Quarry.JOKER_HALF:
+				line_on_other += 1
+				break
+	for xf: Transform3D in q.markers.xforms["EdgeLinesJoker"]:
+		var p := Vector2(xf.origin.x, xf.origin.z)
+		for j in q._xz.size():
+			if p.distance_to(q._xz[j]) < q.road_half(q._ss[j]):
+				line_on_other += 1
+				break
+	cu.check(line_on_other == 0, "no edge line lies inside the other route's road (%d)" % line_on_other)
+	# Sides: main posts alternate sides by recorded side; left of travel is -1.
+	var sides_main: Array = q.markers.edge_sides["EdgePostsMain"]
+	cu.check(sides_main.count(-1.0) > 100 and sides_main.count(1.0) > 100, "main posts on both sides (%d left, %d right)" % [sides_main.count(-1.0), sides_main.count(1.0)])
+	# Own-side placement of main posts: within 0.3..1.5 m outside the edge, on the recorded side.
+	var bad := 0
+	var posts_main: Array[Transform3D] = q.markers.xforms["EdgePostsMain"]
+	for k in posts_main.size():
+		var o := posts_main[k].origin
+		var best := 1e9
+		var lat := 0.0
+		var bs := 0.0
+		for i in range(0, q._xz.size(), 2):
+			var d := Vector2(o.x, o.z).distance_to(q._xz[i])
+			if d < best:
+				best = d
+				bs = q._ss[i]
+				var f := (q._xz[(i + 1) % q._xz.size()] - q._xz[i]).normalized()
+				lat = (Vector2(o.x, o.z) - q._xz[i]).dot(Vector2(-f.y, f.x))
+		var out := absf(lat) - q.road_half(bs)
+		if lat * float(sides_main[k]) <= 0.0 or out < 0.3 or out > 1.5:
+			bad += 1
+	cu.check(bad == 0, "every main-route post is on its own side 0.3-1.5 m outside the edge (%d off)" % bad)
 
 
 ## Independent corner finder over the TrackSpline: radius from the circle through s-6, s, s+6.

@@ -27,6 +27,7 @@ const BOARD_COLOR := Color(1.0, 0.82, 0.0)
 const CHEVRON_COLOR := Color(0.05, 0.05, 0.05)
 
 var corners: Array[Dictionary] = [] ## {s_in, s_turn (turn-in: first point under CORNER_TIGHT, else s_in), s_out, r_min, turn (+1 right / -1 left), s_marker, position, forward}
+var edge_sides := {} ## MultiMesh node name -> Array[float] side (-1 left / +1 right of travel) per instance
 var post_counts := {} ## route name -> posts per side
 var xforms := {} ## MultiMesh node name -> Array[Transform3D] as written (readable headless, where the RenderingServer is a dummy)
 
@@ -38,11 +39,11 @@ func build(q: Quarry) -> void:
 	var main_lines := _walk(q, &"main", LINE_STEP)
 	var joker_pts := _walk(q, &"joker", POST_STEP)
 	var joker_lines := _walk(q, &"joker", LINE_STEP)
-	_posts(q, &"EdgePostsMain", main_pts, POST_LEFT, POST_RIGHT, q.terrain)
-	_posts(q, &"EdgePostsJoker", joker_pts, JOKER_COLOR, JOKER_COLOR, q.terrain)
-	_lines(q, &"EdgeLinesMain", main_lines, LINE_STEP, q.terrain)
-	_lines(q, &"EdgeLinesJoker", joker_lines, LINE_STEP, q.terrain)
-	post_counts = {&"main": main_pts.size(), &"joker": joker_pts.size()}
+	_posts(q, &"main", &"EdgePostsMain", main_pts, POST_LEFT, POST_RIGHT)
+	_posts(q, &"joker", &"EdgePostsJoker", joker_pts, JOKER_COLOR, JOKER_COLOR)
+	_lines(q, &"main", &"EdgeLinesMain", main_lines, LINE_STEP)
+	_lines(q, &"joker", &"EdgeLinesJoker", joker_lines, LINE_STEP)
+	post_counts = {&"main": (xforms[&"EdgePostsMain"] as Array).size(), &"joker": (xforms[&"EdgePostsJoker"] as Array).size()}
 	corners = find_corners(q)
 	_corner_boards(q)
 	_start_finish(q)
@@ -102,40 +103,71 @@ func _put(mm: MultiMesh, k: int, xf: Transform3D) -> void:
 	(xforms[mm.get_meta(&"n")] as Array[Transform3D]).append(xf)
 
 
-func _posts(_q: Quarry, node_name: StringName, pts: Array[Dictionary], left_col: Color, right_col: Color, terrain: HeightmapTerrain) -> void:
+## True when `p` lies on the other route's road (within its half-width + `margin`): the main road
+## and the joker detour overlap where the detour branches off and rejoins, and markers there would
+## stand on a drivable surface.
+static func _on_other_road(q: Quarry, route: StringName, p: Vector2, margin: float) -> bool:
+	if route == &"main":
+		for k in q.joker_xz.size():
+			if p.distance_to(q.joker_xz[k]) < Quarry.JOKER_HALF + margin:
+				return true
+		return false
+	for i in q._xz.size():
+		if p.distance_to(q._xz[i]) < q.road_half(q._ss[i]) + margin:
+			return true
+	return false
+
+
+## Edge candidates of a route at lateral offset hw + `off` (off < 0 = inside the edge), dropping the
+## ones that fall on the other route's road. Each: {p, f, side}.
+func _edge_points(q: Quarry, route: StringName, pts: Array[Dictionary], off: float, margin: float) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for e in pts:
+		var f: Vector2 = e["f"]
+		var right := Vector2(-f.y, f.x)
+		for side in [-1.0, 1.0]:
+			var p: Vector2 = e["p"] + right * side * (float(e["hw"]) + off)
+			if not _on_other_road(q, route, p, margin):
+				out.append({"p": p, "f": f, "side": side})
+	return out
+
+
+func _posts(q: Quarry, route: StringName, node_name: StringName, pts: Array[Dictionary], left_col: Color, right_col: Color) -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(0.3, 1.2, 0.3)
 	box.material = _unshaded(Color(1, 1, 1), true)
-	var mm := _mm(node_name, box, pts.size() * 2, true)
-	var k := 0
-	for e in pts:
+	var list := _edge_points(q, route, pts, POST_OFFSET, 0.5)
+	var mm := _mm(node_name, box, list.size(), true)
+	var sides: Array[float] = []
+	for k in list.size():
+		var e := list[k]
 		var f: Vector2 = e["f"]
-		var right := Vector2(-f.y, f.x)
-		for side in [-1.0, 1.0]:
-			var p: Vector2 = e["p"] + right * side * (float(e["hw"]) + POST_OFFSET)
-			var y := terrain.height_at(p.x, p.y)
-			_put(mm, k, Transform3D(Basis.looking_at(Vector3(f.x, 0, f.y), Vector3.UP), Vector3(p.x, y + 0.6, p.y)))
-			mm.set_instance_color(k, left_col if side < 0.0 else right_col)
-			k += 1
+		var p: Vector2 = e["p"]
+		var y := q.terrain.height_at(p.x, p.y)
+		_put(mm, k, Transform3D(Basis.looking_at(Vector3(f.x, 0, f.y), Vector3.UP), Vector3(p.x, y + 0.6, p.y)))
+		mm.set_instance_color(k, left_col if float(e["side"]) < 0.0 else right_col)
+		sides.append(float(e["side"]))
+	edge_sides[node_name] = sides
 
 
-func _lines(_q: Quarry, node_name: StringName, pts: Array[Dictionary], step: float, terrain: HeightmapTerrain) -> void:
+func _lines(q: Quarry, route: StringName, node_name: StringName, pts: Array[Dictionary], step: float) -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(0.3, 0.04, step + 0.6)
 	box.material = _unshaded(LINE_COLOR)
-	var mm := _mm(node_name, box, pts.size() * 2, false)
-	var k := 0
-	for e in pts:
+	var list := _edge_points(q, route, pts, -LINE_INSET, 0.0)
+	var mm := _mm(node_name, box, list.size(), false)
+	var sides: Array[float] = []
+	for k in list.size():
+		var e := list[k]
 		var f: Vector2 = e["f"]
-		var right := Vector2(-f.y, f.x)
-		for side in [-1.0, 1.0]:
-			var p: Vector2 = e["p"] + right * side * (float(e["hw"]) - LINE_INSET)
-			var y := terrain.height_at(p.x, p.y)
-			var a := p - f * step * 0.5
-			var b := p + f * step * 0.5
-			var dir := Vector3(b.x - a.x, terrain.height_at(b.x, b.y) - terrain.height_at(a.x, a.y), b.y - a.y)
-			_put(mm, k, Transform3D(Basis.looking_at(dir, Vector3.UP), Vector3(p.x, y + 0.1, p.y)))
-			k += 1
+		var p: Vector2 = e["p"]
+		var y := q.terrain.height_at(p.x, p.y)
+		var a := p - f * step * 0.5
+		var b := p + f * step * 0.5
+		var dir := Vector3(b.x - a.x, q.terrain.height_at(b.x, b.y) - q.terrain.height_at(a.x, a.y), b.y - a.y)
+		_put(mm, k, Transform3D(Basis.looking_at(dir, Vector3.UP), Vector3(p.x, y + 0.1, p.y)))
+		sides.append(float(e["side"]))
+	edge_sides[node_name] = sides
 
 
 ## Corners of the main centre line with radius < CORNER_RADIUS: runs of tight curvature, merged when
