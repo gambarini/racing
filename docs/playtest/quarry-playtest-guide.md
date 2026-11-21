@@ -12,6 +12,11 @@ It's debug tooling, not the game HUD (that's #39).
 
 Run these from the repo root. They open a window, so don't add `--headless`.
 
+**After every `git pull`, run the import once first.** It rebuilds Godot's class cache in `project/.godot/`. If you skip it, the scene can fail to start with errors like `Could not find type "QuarryMarkers"` when a merge has added a new `class_name`. CI and the build agents always run this step; a hand-run checkout doesn't.
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path project --import
+```
+
 Time trial (#18). Use one run per tester and put the tester's name in it:
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --path project res://debug/playtest/quarry_playtest.tscn -- --tester=ana
