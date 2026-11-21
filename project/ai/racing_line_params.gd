@@ -12,6 +12,10 @@ extends Resource
 @export var accel_max := 6.5 ## m/s^2, traction-unlimited launch acceleration of the car
 @export var power := 110000.0 ## W at the wheels; a <= power / (mass * v)
 @export var mass := 1200.0 ## kg
+## Aero drag area (m^2) and air density (kg/m^3) of the car (#224, VehicleDefinition.aero_cda):
+## drag 0.5 rho CdA v^2 / mass comes off the power-limited acceleration on the straights.
+@export var drag_cda := 0.88
+@export var air_density := 1.225
 @export_range(0.1, 1.0) var accel_grip_frac := 0.8 ## longitudinal grip budget: fraction of mu * g usable for driving
 @export_range(0.1, 1.0) var brake_grip_frac := 0.8 ## braking budget: fraction of mu * g (brake torque exceeds grip, so grip rules)
 
@@ -28,4 +32,6 @@ func brake_limit(mu_scale: float) -> float:
 
 ## Forward acceleration limit (m/s^2) at speed v on a surface.
 func accel_limit(v: float, mu_scale: float) -> float:
-	return minf(minf(accel_max, power / (mass * maxf(v, 1.0))), accel_grip_frac * mu(mu_scale) * gravity)
+	var drag := 0.5 * air_density * drag_cda * v * v / mass
+	var engine := minf(accel_max, power / (mass * maxf(v, 1.0))) - drag
+	return maxf(minf(engine, accel_grip_frac * mu(mu_scale) * gravity), 0.0)

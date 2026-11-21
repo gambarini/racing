@@ -88,7 +88,7 @@ Race 4 laps at each difficulty, starting from the back.
 - **Easy:** it should feel beatable.
 - **Hard:** a real fight, without obviously unfair pace.
 
-Headless reference flying-lap means: Easy 80.35 s, Medium 69.02 s, Hard 64.38 s. Standing-start lap 1 is slower.
+Headless reference flying-lap means (re-measured in #224, with aero drag and the #223 tyre fix): Easy 80.85 s, Medium 69.29 s, Hard 64.40 s. Standing-start lap 1 is slower.
 
 Record for each difficulty:
 - Finishing position.

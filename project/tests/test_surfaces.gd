@@ -94,7 +94,7 @@ func test_v1_surface_table() -> void:
 	var table := {
 		&"tarmac_wet": [0.70, 0.69, 1.0, 0.014, 0.0],
 		&"dirt": [0.75, 0.81, 1.6, 0.022, 0.00001],
-		&"grass": [0.50, 0.50, 1.6, 0.030, 0.00001],
+		&"grass": [0.50, 0.50, 1.6, 0.060, 0.00008], ## #224: leaving the road costs speed (above gravel, below mud)
 		&"deep_mud": [0.35, 0.375, 2.5, 0.14, 0.0005],
 	}
 	for id in table:

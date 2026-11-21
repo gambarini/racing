@@ -30,6 +30,12 @@ extends Resource
 @export var brake_torque_front := 1600.0 ## Nm per front wheel at brake = 1
 @export var brake_torque_rear := 1000.0 ## Nm per rear wheel at brake = 1
 
+@export_group("Aero")
+## Drag area Cd*A, m^2 (#224): F = 0.5 * rho * CdA * v^2 against the air-relative velocity at the
+## CoM. ~0.88 for a hatchback rally car (Cd ~0.42, A ~2.1 m^2). 0 disables aero.
+@export_range(0.0, 3.0) var aero_cda := 0.88
+@export var air_density := 1.225 ## kg/m^3, sea level, 15 C
+
 @export_group("Suspension")
 @export var spring_rate := 30000.0 ## N/m per wheel
 @export var travel := 0.20 ## m, full droop to full bump
