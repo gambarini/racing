@@ -84,9 +84,19 @@ const FEATURES := [
 	{"s": 160.0, "h": -1.3, "w": 14.0, "kind": "compression"},
 ]
 
+## Readability colours (#214, greybox; sRGB). Road surfaces vs the grass verge vs the rocky off-road
+## beyond it; baked into the terrain vertex colours. quarry_check asserts luminance/hue separation.
+const SURFACE_COLORS := {
+	&"tarmac": Color(0.12, 0.12, 0.13), &"dirt": Color(0.66, 0.48, 0.28), &"gravel": Color(0.80, 0.78, 0.72),
+	&"mud": Color(0.16, 0.10, 0.06), &"grass": Color(0.18, 0.38, 0.12),
+}
+const OFFROAD_COLOR := Color(0.46, 0.41, 0.35)
+
 var terrain: HeightmapTerrain
+var markers: QuarryMarkers ## readability markers (#214), visual only
 var track: TrackSpline
 var heights := PackedFloat32Array()
+var _vcolors := PackedColorArray() ## per terrain cell vertex colour (#214)
 var road_d := PackedFloat32Array() ## per terrain cell: lateral distance to centre line (RASTER_R if far)
 var road_s := PackedFloat32Array() ## per terrain cell: distance along its line of the nearest centre point
 var road_lat := PackedFloat32Array() ## per terrain cell: signed lateral offset (+ = right of travel)
@@ -143,7 +153,10 @@ func build() -> void:
 	terrain.surface_map.rebuild_cache() # pre-warm: no hitch in the first physics tick (#159)
 	add_child(terrain)
 	terrain.build_collider()
+	terrain.vertex_colors = _vcolors
 	terrain.build_visual()
+	markers = QuarryMarkers.new()
+	markers.build(self)
 
 
 ## Road surface height at distance s along the line (flat start zone, rolling elsewhere).
@@ -332,21 +345,22 @@ func _add_marker(marker_name: StringName, xz: Vector2, y: float, dir: Vector2, h
 	m.basis = Basis.looking_at(Vector3(f.x, 0.0, f.y), Vector3.UP)
 	add_child(m)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.45, 0.05)
+	mat.albedo_color = QuarryMarkers.JOKER_COLOR
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	for side in [-1.0, 1.0]:
 		var post := MeshInstance3D.new()
 		var box := BoxMesh.new()
-		box.size = Vector3(0.5, 5.0, 0.5)
+		box.size = Vector3(0.6, 7.0, 0.6)
 		box.material = mat
 		post.mesh = box
-		post.position = Vector3(side * half, 2.5, 0.0)
+		post.position = Vector3(side * half, 3.5, 0.0)
 		m.add_child(post)
 	var bar := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(half * 2.0, 0.6, 0.4)
+	bm.size = Vector3(half * 2.0, 1.6, 0.4)
 	bm.material = mat
 	bar.mesh = bm
-	bar.position = Vector3(0.0, 5.0, 0.0)
+	bar.position = Vector3(0.0, 6.6, 0.0)
 	m.add_child(bar)
 
 
@@ -444,12 +458,20 @@ func _weights(d: float, lat: float, s: float, hw: float, line: int) -> Dictionar
 func _build_surface_map() -> SurfaceMap:
 	var img0 := Image.create(N, N, false, Image.FORMAT_RGBA8)
 	var img1 := Image.create(N, N, false, Image.FORMAT_RGBA8)
+	_vcolors.resize(N * N)
 	for iz in N:
 		for ix in N:
 			var k := iz * N + ix
 			var w := _weights(road_d[k], road_lat[k], road_s[k], road_hw[k], road_line[k])
 			img0.set_pixel(ix, iz, Color(w.get(&"tarmac", 0.0), w.get(&"dirt", 0.0), w.get(&"grass", 0.0), w.get(&"gravel", 0.0)))
 			img1.set_pixel(ix, iz, Color(w.get(&"mud", 0.0), 0, 0, 0))
+			var verge := SURFACE_COLORS[&"grass"] as Color
+			var rock := smoothstep(8.0, 24.0, road_d[k] - road_hw[k]) if road_d[k] < RASTER_R else 1.0
+			var col := Color(0, 0, 0)
+			for id in w:
+				var base: Color = verge.lerp(OFFROAD_COLOR, rock) if id == &"grass" else SURFACE_COLORS[id]
+				col += base * float(w[id])
+			_vcolors[k] = Color(col.r, col.g, col.b)
 	var sm := SurfaceMap.new()
 	# Texel centres at (i + 0.5) * size / N + origin = i * CELL, aligned with the height samples.
 	sm.origin = Vector2(-CELL * 0.5, -CELL * 0.5)
