@@ -126,6 +126,7 @@ func _physics_process(delta: float) -> void:
 	step_suspension(delta)
 	step_powertrain(delta)
 	step_wheels(delta)
+	step_aero(delta)
 
 
 ## Clear all driver and drivetrain state after a teleport (reset-to-track, #106): wheel spin,
@@ -290,6 +291,20 @@ func step_wheels(delta: float) -> void:
 		if tire_forces_enabled and w.is_grounded:
 			apply_force(fwd * fx_body + right * fy_body, w.contact_point - pos)
 			_apply_resistance(w, surf, vel, wheel_mass, delta, pos)
+
+
+## Aerodynamic drag (#224) at the CoM, still air: F = -0.5 rho CdA |v| v, capped so it cannot
+## reverse the motion in one tick. No lift or downforce yet.
+func step_aero(delta: float) -> void:
+	var d := definition
+	if not tire_forces_enabled or d.aero_cda <= 0.0:
+		return
+	var v := linear_velocity
+	var speed := v.length()
+	if speed < 1e-3:
+		return
+	var f := minf(0.5 * d.air_density * d.aero_cda * speed * speed, mass * speed / delta)
+	apply_central_force(-v / speed * f)
 
 
 ## Tire parameters for a wheel's surface. Single-surface wheels (registry definition) use a
