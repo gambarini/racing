@@ -116,8 +116,10 @@ check_ceiling() {
 run_step_inner() {
   local name="$1"; shift
   local log="$LOGDIR/$name.log"
-  if [ -z "${CI:-}" ] && [[ "$TIMING_STEPS" == *" $name "* ]]; then
-    run_once "ATTEMPT FAILED" "$name" "$log" "$@" && return 0
+  if [[ "$TIMING_STEPS" == *" $name "* ]]; then
+    # CI_FORCE_FIRST_FAIL=<name>: make the first attempt fail, to prove the retry path (also with CI=1).
+    if [ "${CI_FORCE_FIRST_FAIL:-}" = "$name" ]; then run_once "ATTEMPT FAILED" "$name" "$log" false && return 0
+    else run_once "ATTEMPT FAILED" "$name" "$log" "$@" && return 0; fi
     echo "RETRY: $name (timing check, load: $(uptime | sed 's/.*load averages*: //'))"
   fi
   run_once "STEP FAILED" "$name" "$log" "$@" && return 0
