@@ -60,9 +60,14 @@ in_shard() { # name -> 0 if this run should execute it
 # BUDGET_DEFAULT. Overrides for testing: CI_BUDGET_OVERRIDE="telemetry_check=1 tests=5" (name=seconds,
 # space or comma separated), CI_BUDGET_DEFAULT=<s>. CI_TOTAL_CEILING=<s> (default 480, below the
 # 10-min workflow timeout) bounds the whole run's wall time (lock waiting excluded).
+# ai_personality/ai_tactics (#211): median of the last 4 green main CI runs (3-shard, 4 vCPU) x 2.0:
+# personality 271/166/180/209 s -> median 194.5 -> 390; tactics 178/125/145/124 s -> median 135 -> 270.
+# Per-step timeout (#211): a check is killed after budget x CI_TIMEOUT_MULT (default 2.0, estimate) and
+# reported as "TIMEOUT <name>" (a failure; the run continues). Portable: no GNU timeout needed.
+TIMEOUT_MULT="${CI_TIMEOUT_MULT:-2.0}"
 BUDGET_DEFAULT="${CI_BUDGET_DEFAULT:-45}"
 CEILING="${CI_TOTAL_CEILING:-480}"
-BUDGET_TABLE=" import=60 tests=90 ai_personality_check=420 ai_tactics_check=330 ai_lap_check=140 ai_driver_check=125 quarry_independence_check=105 "
+BUDGET_TABLE=" import=60 tests=90 ai_personality_check=390 ai_tactics_check=270 ai_lap_check=140 ai_driver_check=125 quarry_independence_check=105 "
 budget_for() { # name -> seconds
   local name="$1" kv
   local ov="${CI_BUDGET_OVERRIDE:-}"; for kv in ${ov//,/ }; do
@@ -79,13 +84,28 @@ START=$SECONDS
 # shards and on GitHub CI too: the retry only costs time when the first attempt failed.
 TIMING_STEPS=" quarry_timetrial_check telemetry_check surface_cache_timing_check terrain_alloc_check "
 
+kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
 run_once() { # tag, name, log, command...  (tag: "STEP FAILED", or "ATTEMPT FAILED" before a retry)
+  # Returns 0 ok, 1 failed, 2 timed out (not retried). The command runs in the background with a
+  # sleep-based watchdog (portable: macOS has no GNU timeout); output goes through a fifo into tee.
   local tag="$1" name="$2" log="$3"; shift 3
+  local limit; limit="$(awk -v b="$(budget_for "$name")" -v m="$TIMEOUT_MULT" 'BEGIN{printf "%d", b*m + 0.999}')"
   [ "$SHARD_N" -le 1 ] && echo "::group::$name"
   echo "STEP START: $name"
-  "$@" 2>&1 | tee "$log"
-  local code=${PIPESTATUS[0]}
+  local fifo="$LOGDIR/.$name.fifo.$$" flag="$LOGDIR/.$name.timeout.$$"
+  rm -f "$fifo" "$flag"; mkfifo "$fifo"
+  tee "$log" < "$fifo" & local teepid=$!
+  "$@" > "$fifo" 2>&1 & local pid=$!
+  # Watchdog polls once a second so it can exit as soon as the command does (no orphaned sleeps).
+  ( i=0; while [ "$i" -lt "$limit" ]; do kill -0 "$pid" 2>/dev/null || exit 0; sleep 1; i=$((i + 1)); done
+    kill -0 "$pid" 2>/dev/null || exit 0
+    touch "$flag"; kill_tree "$pid"; sleep 2; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 & local wd=$!
+  { wait "$pid"; } 2>/dev/null; local code=$?
+  pkill -P "$wd" 2>/dev/null; { wait "$wd"; } 2>/dev/null
+  wait "$teepid" 2>/dev/null
+  rm -f "$fifo"
   [ "$SHARD_N" -le 1 ] && echo "::endgroup::"
+  if [ -e "$flag" ]; then rm -f "$flag"; echo "TIMEOUT $name (killed after ${limit}s = budget x $TIMEOUT_MULT)"; return 2; fi
   if [ "$code" -ne 0 ]; then echo "$tag: $name (exit $code)"; return 1; fi
   if grep -E "(SCRIPT ERROR|ERROR):" "$log" >/dev/null; then
     echo "$tag: $name (ERROR in output)"; grep -nE "SCRIPT ERROR|ERROR:" "$log" | head -20; return 1
@@ -97,16 +117,17 @@ run_step() { # name, then command...
   local name="$1"; shift
   in_shard "$name" || return 0
   local t0=$SECONDS dt budget
+  RETRIED=
   run_step_inner "$name" "$@"
   dt=$((SECONDS - t0)); budget="$(budget_for "$name")"
   echo "STEP END: $name ${dt}s (budget ${budget}s)"
-  echo "$dt $budget $name" >> "$TIMES"
+  echo "$dt $budget $name${RETRIED:+ retry}" >> "$TIMES"
   if [ "$dt" -gt "$budget" ]; then echo "BUDGET EXCEEDED: $name ${dt}s > ${budget}s"; rc=1; fi
 }
 print_times() { # files...: merged per-check table, slowest first
   echo "== per-check wall time vs budget (s), slowest first =="
   printf '%6s %6s  %s\n' time budget check
-  cat "$@" 2>/dev/null | sort -rn | awk '{printf "%6d %6d  %s%s\n", $1, $2, $3, ($1 > $2 ? "  OVER BUDGET" : "")}'
+  cat "$@" 2>/dev/null | sort -rn | awk '{printf "%6d %6d  %s%s%s\n", $1, $2, $3, ($4 == "retry" ? " (retry)" : ""), ($1 > $2 ? "  OVER BUDGET" : "")}'
 }
 check_ceiling() {
   local total=$((SECONDS - START))
@@ -118,8 +139,12 @@ run_step_inner() {
   local log="$LOGDIR/$name.log"
   if [[ "$TIMING_STEPS" == *" $name "* ]]; then
     # CI_FORCE_FIRST_FAIL=<name>: make the first attempt fail, to prove the retry path (also with CI=1).
-    if [ "${CI_FORCE_FIRST_FAIL:-}" = "$name" ]; then run_once "ATTEMPT FAILED" "$name" "$log" false && return 0
-    else run_once "ATTEMPT FAILED" "$name" "$log" "$@" && return 0; fi
+    local r
+    if [ "${CI_FORCE_FIRST_FAIL:-}" = "$name" ]; then run_once "ATTEMPT FAILED" "$name" "$log" false; r=$?
+    else run_once "ATTEMPT FAILED" "$name" "$log" "$@"; r=$?; fi
+    [ "$r" -eq 0 ] && return 0
+    if [ "$r" -eq 2 ]; then rc=1; return; fi  # timed out: no retry
+    RETRIED=1
     echo "RETRY: $name (timing check, load: $(uptime | sed 's/.*load averages*: //'))"
   fi
   run_once "STEP FAILED" "$name" "$log" "$@" && return 0
