@@ -137,6 +137,7 @@ func check_binder() -> void:
 		check(hub.distance_to(vis.hub_world(w)) <= 0.01, "%s visual hub matches Wheel hub" % tag)
 		var expected := w.contact_point + Vector3.UP * R
 		check(hub.distance_to(expected) <= 0.01, "%s hub == contact + up*radius (%.4f m off)" % [tag, hub.distance_to(expected)])
+	check_cues(v, vis)
 	# spin: omega = 10 rad/s for 1 s (frozen physics state, binder driven manually)
 	v.freeze = true
 	for w in v.wheels:
@@ -175,3 +176,44 @@ func check_binder() -> void:
 	var cal := vis.model_root.find_child("caliper_FL", true, false) as Node3D
 	check(absf(cal.basis.get_euler(EULER_ORDER_YXZ).x) <= 0.001, "caliper does not spin")
 	world.queue_free()
+
+
+func emission_of(n: Node) -> Color:
+	return ((n as MeshInstance3D).material_override as StandardMaterial3D).emission
+
+
+## Front/back cues (#216): markers exist, sit on opposite sides of the centre along the car's forward
+## axis (sim -Z), have the right colours, and brake lights follow Vehicle.brake only.
+func check_cues(v: Vehicle, vis: VehicleVisual) -> void:
+	var r := vis.model_root
+	var names := ["Headlight_L", "Headlight_R", "Taillight_L", "Taillight_R", "NoseStripe"]
+	for n in names:
+		check(r.find_child(n, true, false) is MeshInstance3D, n + " exists")
+	var fwd := -v.global_basis.z
+	var hl := r.find_child("Headlight_L", true, false) as Node3D
+	var tl := r.find_child("Taillight_L", true, false) as Node3D
+	var ns := r.find_child("NoseStripe", true, false) as Node3D
+	var c := v.global_position
+	check((hl.global_position - c).dot(fwd) > 1.0, "headlights in front of the centre along forward")
+	check((tl.global_position - c).dot(fwd) < -1.0, "tail lights behind the centre along forward")
+	check((ns.global_position - c).dot(fwd) > 0.0, "nose stripe on the front half")
+	for n in ["Headlight_L", "Headlight_R"]:
+		var e := emission_of(r.find_child(n, true, false))
+		check(e.r > 0.9 and e.g > 0.9, n + " emission white/yellow")
+	for n in ["Taillight_L", "Taillight_R"]:
+		var e := emission_of(r.find_child(n, true, false))
+		check(e.r > 0.9 and e.g < 0.2 and e.b < 0.2, n + " emission red")
+	var se := emission_of(ns)
+	check(se.r < 0.3 and se.b > 0.5, "nose stripe colour (cyan) not used at the rear")
+	check(vis.tail_material.emission_energy_multiplier == VehicleVisual.TAIL_IDLE_ENERGY, "tail idle energy")
+	v.brake = 0.8
+	vis.advance(0.0)
+	var on := vis.tail_material.emission_energy_multiplier
+	check(on >= 3.0 * VehicleVisual.TAIL_IDLE_ENERGY, "brake > 0.5 energy %.2f >= 3x idle" % on)
+	v.brake = 0.0
+	vis.advance(0.0)
+	check(vis.tail_material.emission_energy_multiplier == VehicleVisual.TAIL_IDLE_ENERGY, "released returns to idle")
+	for w in v.wheels:
+		w.omega = -20.0
+	vis.advance(0.0)
+	check(vis.tail_material.emission_energy_multiplier == VehicleVisual.TAIL_IDLE_ENERGY, "reverse wheel spin does not light the brake lights")

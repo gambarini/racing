@@ -67,6 +67,83 @@ func run_path(fps: float) -> Vector3:
 	return r
 
 
+## Scripted 180 deg spin at ~80 km/h (#216): heading turns at 300 deg/s for 0.6 s while the car keeps
+## sliding along its old velocity, then the velocity swings to the new nose over 0.8 s.
+func spin_check() -> void:
+	var fps := 60.0
+	var dt := 1.0 / fps
+	var target := Node3D.new()
+	get_root().add_child(target)
+	var cam := make_cam(target)
+	var spin_t := 0.6
+	var rate := PI / spin_t
+	var v0 := Vector3(0, 0, -22.2)
+	var pos := Vector3.ZERO
+	var prev_cam := 0.0
+	var max_rate := 0.0
+	var max_step := 0.0
+	var recover_t := -1.0  # time since the car yaw rate dropped under 60 deg/s
+	var aligned_at := -1.0
+	var reversed_until := 0.0  # last time (since spin end) the nose points towards the camera
+	var steer_ok_late := true
+	var n := int(4.0 * fps)
+	for i in n:
+		var t := i * dt
+		var h := minf(t, spin_t) * rate if t > 0.5 else 0.0
+		var yaw_rate := rate if (t > 0.5 and t < 0.5 + spin_t) else 0.0
+		var k := clampf((t - 0.5 - spin_t) / 0.8, 0.0, 1.0)
+		var nose := Vector3(-sin(h), 0, -cos(h))
+		var vel := v0.lerp(nose * 22.2, k)
+		pos += vel * dt
+		target.position = pos
+		target.rotation = Vector3(0, h, 0)
+		if t > 0.5 + spin_t and recover_t < 0.0:
+			recover_t = t
+		cam.advance(dt)
+		var cy: float = cam.rig.yaw
+		if i > 1:
+			var step := absf(rad_to_deg(angle_difference(prev_cam, cy)))
+			max_step = maxf(max_step, step)
+			max_rate = maxf(max_rate, step * fps)
+		prev_cam = cy
+		if recover_t >= 0.0:
+			var rel: float = angle_difference(cy, h)
+			var since := t - recover_t
+			if cos(rel) < 0.0:
+				reversed_until = since
+			if aligned_at < 0.0 and absf(rad_to_deg(rel)) <= 10.0 and vel.dot(nose) > 0.0:
+				aligned_at = since
+			# Steering readability proxy: with steer sign s and heading rate w, nose screen x moves
+			# by -cos(rel) * w * s; normal driving (rel ~ 0) gives negative, reversed when cos < 0.
+			if since > 1.0 and cos(rel) <= 0.0:
+				steer_ok_late = false
+	print("spin: max cam yaw rate %.1f deg/s, max step %.2f deg/frame, aligned %.2f s after spin end, controls reversed for %.2f s" % [max_rate, max_step, aligned_at, reversed_until])
+	check(max_rate <= 240.0, "spin: camera yaw rate %.1f <= 240 deg/s" % max_rate)
+	check(max_step <= 15.0, "spin: single-frame camera yaw jump %.2f <= 15 deg" % max_step)
+	check(aligned_at >= 0.0 and aligned_at <= 1.0, "spin: camera aligned within 10 deg %.2f s after spin end (<= 1.0)" % aligned_at)
+	check(reversed_until <= 1.0, "spin: worst-case time controls look reversed %.2f s <= 1.0" % reversed_until)
+	check(steer_ok_late, "spin: steering sign matches normal driving after the recovery window")
+	cam.queue_free()
+	target.queue_free()
+
+
+## Backward travel: camera stays behind the nose, not the velocity.
+func reverse_check() -> void:
+	var dt := 1.0 / 60.0
+	var target := Node3D.new()
+	get_root().add_child(target)
+	var cam := make_cam(target)
+	var worst := 0.0
+	for i in 240:
+		target.position = Vector3(0, 0, 15.0 * i * dt)  # nose -Z, moving +Z
+		cam.advance(dt)
+		worst = maxf(worst, absf(rad_to_deg(cam.rig.yaw)))
+	check(worst < 1.0, "reversing: camera yaw stays behind the nose (%.3f deg)" % worst)
+	check(cam.global_position.z > target.position.z, "reversing: camera behind the nose side (+Z)")
+	cam.queue_free()
+	target.queue_free()
+
+
 func _initialize() -> void:
 	await process_frame
 	# Steady state at 30 m/s straight, 3 s.
@@ -141,6 +218,9 @@ func _initialize() -> void:
 	check(sd < 0.01, "per-frame displacement stddev %.5f m" % sd)
 	c3.queue_free()
 	t3.queue_free()
+
+	spin_check()
+	reverse_check()
 
 	print("camera_check failures: ", failures)
 	quit(1 if failures > 0 else 0)

@@ -28,8 +28,15 @@ func step(tpos: Vector3, tvel: Vector3, heading: Vector3, p: CameraProfile, dt: 
 		# Smooth the wrapped error towards zero, so +/-PI crossings never step.
 		var err: float = -angle_difference(yaw, want)
 		var s := ChaseMath.smooth_step(err, yaw_err_vel, 0.0, p.yaw_smooth_time, dt)
-		yaw = wrapf(want + s[0], -PI, PI)
+		var new_yaw: float = wrapf(want + s[0], -PI, PI)
 		yaw_err_vel = s[1]
+		# Rate cap (#216): after a spin the camera swings back at a bounded rate, never a snap.
+		var cap: float = deg_to_rad(p.max_yaw_rate_deg)
+		var d: float = angle_difference(yaw, new_yaw)
+		if absf(d) > cap * dt:
+			new_yaw = wrapf(yaw + signf(d) * cap * dt, -PI, PI)
+			yaw_err_vel = clampf(yaw_err_vel, -cap, cap)
+		yaw = new_yaw
 		var f := ChaseMath.smooth_step(fov, fov_vel, fov_want, p.fov_smooth_time, dt)
 		fov = f[0]
 		fov_vel = f[1]

@@ -29,3 +29,5 @@ extends Resource
 @export_range(0.0, 200.0, 0.5) var fov_speed_max: float = 60.0
 ## Smoothing time of the FOV (s).
 @export_range(0.01, 2.0, 0.01) var fov_smooth_time: float = 0.3
+## Cap on the camera yaw rate (deg/s) so a spin never snaps the view (#216).
+@export_range(30.0, 720.0, 1.0) var max_yaw_rate_deg: float = 220.0
