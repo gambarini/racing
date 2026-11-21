@@ -47,16 +47,16 @@ in_shard() { # name -> 0 if this run should execute it
   local want
   case "$1" in
     import) want=$SHARD_I ;;                         # every shard imports
-    ai_personality_check) want=0 ;;                  # (116)
-    ai_tactics_check|ai_lap_check) want=1 ;;         # (58) (~55)
-    tests|ai_driver_check|quarry_*) want=2 ;;        # (33) (38) (19+19+11+9)
+    ai_personality_check) want=0 ;;                  # (111)
+    ai_tactics_check|ai_lap_check) want=1 ;;         # (85) (47)
+    tests|ai_driver_check|quarry_*) want=2 ;;        # (33) (32) (20+19+13+12+9)
     *) want=$((rr % SHARD_N)); rr=$((rr + 1)) ;;
   esac
   [ $((want % SHARD_N)) -eq "$SHARD_I" ]
 }
 
 # Time budgets (#198): max seconds per check, so the PR that adds a slow check fails instead of main.
-# Set from the measured step times of a CI=1 3-shard run with >= 1.5x headroom; unlisted checks get
+# Set from CI-derived (GitHub 3-shard, 4 vCPU) step times with >= 1.5x headroom, NOT from local unsharded runs (#225 kept the #198/#211 CI basis); unlisted checks get
 # BUDGET_DEFAULT. Overrides for testing: CI_BUDGET_OVERRIDE="telemetry_check=1 tests=5" (name=seconds,
 # space or comma separated), CI_BUDGET_DEFAULT=<s>. CI_TOTAL_CEILING=<s> (default 480, below the
 # 10-min workflow timeout) bounds the whole run's wall time (lock waiting excluded).
@@ -67,7 +67,7 @@ in_shard() { # name -> 0 if this run should execute it
 TIMEOUT_MULT="${CI_TIMEOUT_MULT:-2.0}"
 BUDGET_DEFAULT="${CI_BUDGET_DEFAULT:-45}"
 CEILING="${CI_TOTAL_CEILING:-480}"
-BUDGET_TABLE=" import=60 tests=90 ai_personality_check=390 ai_tactics_check=270 ai_lap_check=140 ai_driver_check=125 quarry_independence_check=105 "
+BUDGET_TABLE=" import=60 tests=90 ai_personality_check=390 ai_tactics_check=270 ai_lap_check=140 ai_driver_check=125 track_limits_drive_check=20 "
 budget_for() { # name -> seconds
   local name="$1" kv
   local ov="${CI_BUDGET_OVERRIDE:-}"; for kv in ${ov//,/ }; do
