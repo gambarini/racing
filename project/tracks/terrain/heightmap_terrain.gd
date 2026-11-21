@@ -13,6 +13,7 @@ var n := 0 ## samples per edge
 var origin := Vector2.ZERO ## world XZ of sample (0,0)
 var heights := PackedFloat32Array() ## row-major, index = iz * n + ix
 var surface_map: SurfaceMap
+var vertex_colors := PackedColorArray() ## optional per height sample (sRGB, iz * n + ix); baked into the visual mesh (#214)
 var body: StaticBody3D
 var _scratch := PackedFloat32Array() ## reusable weights buffer for dominant_surface_at
 
@@ -107,6 +108,11 @@ func build_visual() -> void:
 	var chunks := ceili(float(cells) / chunk_cells)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.45, 0.5, 0.35)
+	var coloured := vertex_colors.size() == n * n
+	if coloured:
+		mat.albedo_color = Color(1, 1, 1)
+		mat.vertex_color_use_as_albedo = true
+		mat.vertex_color_is_srgb = true
 	for cz in chunks:
 		for cx in chunks:
 			var x0 := cx * chunk_cells
@@ -115,8 +121,11 @@ func build_visual() -> void:
 			var d := mini(chunk_cells, cells - z0)
 			var verts := PackedVector3Array()
 			var norms := PackedVector3Array()
+			var cols := PackedColorArray()
 			verts.resize((w + 1) * (d + 1))
 			norms.resize((w + 1) * (d + 1))
+			if coloured:
+				cols.resize((w + 1) * (d + 1))
 			var k := 0
 			for iz in d + 1:
 				for ix in w + 1:
@@ -128,6 +137,8 @@ func build_visual() -> void:
 					var hd := heights[maxi(sz - step, 0) * n + sx]
 					var hu := heights[mini(sz + step, n - 1) * n + sx]
 					norms[k] = Vector3(hl - hr, 2.0 * step * cell, hd - hu).normalized()
+					if coloured:
+						cols[k] = vertex_colors[sz * n + sx]
 					k += 1
 			var idx := PackedInt32Array()
 			idx.resize(w * d * 6)
@@ -150,6 +161,8 @@ func build_visual() -> void:
 			arrays[Mesh.ARRAY_VERTEX] = verts
 			arrays[Mesh.ARRAY_NORMAL] = norms
 			arrays[Mesh.ARRAY_INDEX] = idx
+			if coloured:
+				arrays[Mesh.ARRAY_COLOR] = cols
 			var mesh := ArrayMesh.new()
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 			mesh.surface_set_material(0, mat)
