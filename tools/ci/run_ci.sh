@@ -153,7 +153,8 @@ if [ -n "${CI:-}" ] && [ -z "${SHARD:-}" ] && [ -z "${RUN_CI_SERIAL:-}" ]; then
         | awk -v p="[s$i] " '{print p $0; fflush()}'; exit "${PIPESTATUS[0]}" ) &
     pids+=($!)
   done
-  trap 'for p in "${pids[@]}"; do pkill -TERM -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done; echo "KILLED"; exit 143' INT TERM
+  kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
+  trap 'for p in "${pids[@]}"; do kill_tree "$p"; done; echo "KILLED"; exit 143' INT TERM
   for k in 0 1 2; do wait "${pids[$k]}" || rc=1; done
   trap - INT TERM
   print_times "$TIMES" "$LOGDIR"/shard*/step-times.txt
