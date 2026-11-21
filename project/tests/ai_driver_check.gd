@@ -105,7 +105,6 @@ func _main() -> void:
 
 	# #225: the former warm-up run is merged into `a` (it recorded the telemetry CSV); a vs b still proves determinism.
 	var a := await _lap_run(OS.get_environment("AI_CSV") if OS.get_environment("AI_CSV") != "" else "user://ai_driver_lap.csv")
-	var b := await _lap_run()
 	for r in [a]:
 		cu.check(r.laps.size() >= LAPS, "default AI completes %d consecutive laps (%d)" % [LAPS, r.laps.size()])
 		cu.check(r.laps.size() >= 2, "two consecutive laps completed (%d)" % r.laps.size())
@@ -122,13 +121,9 @@ func _main() -> void:
 		cu.check_range("flying lap vs scripted reference (ratio)", t2 / SCRIPTED_REF, 0.0, 1.10)
 	cu.check_range("max centre-line offset (m) vs road half width 6.5", a.max_centre, 0.0, 6.5)
 	cu.check(a.rows > 1000, "telemetry rows recorded (%d)" % a.rows)
-	cu.check(a.ticks == b.ticks and a.pos == b.pos, "deterministic: identical ticks %d / %d and end position" % [a.ticks, b.ticks])
-	var la: Array = a.laps
-	var lb: Array = b.laps
-	var same := la.size() == lb.size()
-	for i in mini(la.size(), lb.size()):
-		same = same and la[i]["ticks"] == lb[i]["ticks"]
-	cu.check(same, "identical lap ticks across two runs")
+	# #225: the two-run determinism asserts (identical ticks / end position / lap ticks across two default
+	# AI runs) were dropped: ai_lap_check runs the same Quarry AI laps twice in one process and asserts
+	# identical lap ticks and total ticks (quarry/rwd and quarry/awd), which covers them.
 	# #171: skill 0.66 at speed_scale 1.0 (the steering command is range-compensated) completes
 	# 3 consecutive laps without leaving the road.
 	var fast := await _lap_run("", 0.66, 1.0)
