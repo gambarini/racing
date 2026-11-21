@@ -55,16 +55,37 @@ in_shard() { # name -> 0 if this run should execute it
   [ $((want % SHARD_N)) -eq "$SHARD_I" ]
 }
 
-# Wall-clock-sensitive checks: locally, a failure is retried once and logged as RETRY, so a
-# load spike from a benchmark or a single-check run elsewhere doesn't fail the gate. CI never retries.
-TIMING_STEPS=" quarry_timetrial_check telemetry_check surface_cache_timing_check "
+# Time budgets (#198): max seconds per check, so the PR that adds a slow check fails instead of main.
+# Set from the measured step times of a CI=1 3-shard run with >= 1.5x headroom; unlisted checks get
+# BUDGET_DEFAULT. Overrides for testing: CI_BUDGET_OVERRIDE="telemetry_check=1 tests=5" (name=seconds,
+# space or comma separated), CI_BUDGET_DEFAULT=<s>. CI_TOTAL_CEILING=<s> (default 480, below the
+# 10-min workflow timeout) bounds the whole run's wall time (lock waiting excluded).
+BUDGET_DEFAULT="${CI_BUDGET_DEFAULT:-45}"
+CEILING="${CI_TOTAL_CEILING:-480}"
+BUDGET_TABLE=" import=60 tests=90 ai_personality_check=420 ai_tactics_check=330 ai_lap_check=140 ai_driver_check=125 quarry_independence_check=105 "
+budget_for() { # name -> seconds
+  local name="$1" kv
+  local ov="${CI_BUDGET_OVERRIDE:-}"; for kv in ${ov//,/ }; do
+    [ "${kv%%=*}" = "$name" ] && { echo "${kv#*=}"; return; }
+  done
+  kv="${BUDGET_TABLE##* $name=}"
+  if [ "$kv" != "$BUDGET_TABLE" ]; then echo "${kv%% *}"; return; fi
+  case "$name" in quarry_*) echo 70 ;; *) echo "$BUDGET_DEFAULT" ;; esac
+}
+START=$SECONDS
+
+# Wall-clock-sensitive checks: a failure is retried once and logged as RETRY, so a load spike (or the
+# 3 parallel shards sharing 4 vCPUs, #198) doesn't fail the absolute-time gates. This applies inside
+# shards and on GitHub CI too: the retry only costs time when the first attempt failed.
+TIMING_STEPS=" quarry_timetrial_check telemetry_check surface_cache_timing_check terrain_alloc_check "
 
 run_once() { # tag, name, log, command...  (tag: "STEP FAILED", or "ATTEMPT FAILED" before a retry)
   local tag="$1" name="$2" log="$3"; shift 3
-  echo "::group::$name"
+  [ "$SHARD_N" -le 1 ] && echo "::group::$name"
+  echo "STEP START: $name"
   "$@" 2>&1 | tee "$log"
   local code=${PIPESTATUS[0]}
-  echo "::endgroup::"
+  [ "$SHARD_N" -le 1 ] && echo "::endgroup::"
   if [ "$code" -ne 0 ]; then echo "$tag: $name (exit $code)"; return 1; fi
   if grep -E "(SCRIPT ERROR|ERROR):" "$log" >/dev/null; then
     echo "$tag: $name (ERROR in output)"; grep -nE "SCRIPT ERROR|ERROR:" "$log" | head -20; return 1
@@ -75,15 +96,30 @@ TIMES="$LOGDIR/step-times.txt"; : > "$TIMES"
 run_step() { # name, then command...
   local name="$1"; shift
   in_shard "$name" || return 0
-  local t0=$SECONDS
+  local t0=$SECONDS dt budget
   run_step_inner "$name" "$@"
-  echo "$((SECONDS - t0)) $name" >> "$TIMES"
+  dt=$((SECONDS - t0)); budget="$(budget_for "$name")"
+  echo "STEP END: $name ${dt}s (budget ${budget}s)"
+  echo "$dt $budget $name" >> "$TIMES"
+  if [ "$dt" -gt "$budget" ]; then echo "BUDGET EXCEEDED: $name ${dt}s > ${budget}s"; rc=1; fi
+}
+print_times() { # files...: merged per-check table, slowest first
+  echo "== per-check wall time vs budget (s), slowest first =="
+  printf '%6s %6s  %s\n' time budget check
+  cat "$@" 2>/dev/null | sort -rn | awk '{printf "%6d %6d  %s%s\n", $1, $2, $3, ($1 > $2 ? "  OVER BUDGET" : "")}'
+}
+check_ceiling() {
+  local total=$((SECONDS - START))
+  echo "total: ${total}s (ceiling ${CEILING}s)"
+  if [ "$total" -gt "$CEILING" ]; then echo "CEILING EXCEEDED: total ${total}s > ceiling ${CEILING}s"; rc=1; fi
 }
 run_step_inner() {
   local name="$1"; shift
   local log="$LOGDIR/$name.log"
-  if [ -z "${CI:-}" ] && [[ "$TIMING_STEPS" == *" $name "* ]]; then
-    run_once "ATTEMPT FAILED" "$name" "$log" "$@" && return 0
+  if [[ "$TIMING_STEPS" == *" $name "* ]]; then
+    # CI_FORCE_FIRST_FAIL=<name>: make the first attempt fail, to prove the retry path (also with CI=1).
+    if [ "${CI_FORCE_FIRST_FAIL:-}" = "$name" ]; then run_once "ATTEMPT FAILED" "$name" "$log" false && return 0
+    else run_once "ATTEMPT FAILED" "$name" "$log" "$@" && return 0; fi
     echo "RETRY: $name (timing check, load: $(uptime | sed 's/.*load averages*: //'))"
   fi
   run_once "STEP FAILED" "$name" "$log" "$@" && return 0
@@ -112,16 +148,19 @@ fi
 # single import. RUN_CI_SERIAL=1 or an explicit SHARD keeps the old serial behaviour.
 if [ -n "${CI:-}" ] && [ -z "${SHARD:-}" ] && [ -z "${RUN_CI_SERIAL:-}" ]; then
   pids=()
+  # Shard output streams live, prefixed [sN], with STEP START/END markers; a killed run's last marker
+  # names the running check. Each shard's full output also lands in $LOGDIR/shardN.out.
   for i in 0 1 2; do
-    SHARD="$i/3" SKIP_IMPORT=1 bash "$0" "$LOGDIR/shard$i" > "$LOGDIR/shard$i.out" 2>&1 &
+    ( SHARD="$i/3" SKIP_IMPORT=1 bash "$0" "$LOGDIR/shard$i" 2>&1 | tee "$LOGDIR/shard$i.out" \
+        | awk -v p="[s$i] " '{print p $0; fflush()}'; exit "${PIPESTATUS[0]}" ) &
     pids+=($!)
   done
-  for k in 0 1 2; do
-    wait "${pids[$k]}" || rc=1
-    echo "::group::shard $k output"; cat "$LOGDIR/shard$k.out"; echo "::endgroup::"
-  done
-  echo "== per-step wall time (s), slowest first =="; cat "$TIMES" "$LOGDIR"/shard*/step-times.txt | sort -rn | head -25
-  echo "total: $SECONDS s"
+  kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
+  trap 'for p in "${pids[@]}"; do kill_tree "$p"; done; echo "KILLED"; exit 143' INT TERM
+  for k in 0 1 2; do wait "${pids[$k]}" || rc=1; done
+  trap - INT TERM
+  print_times "$TIMES" "$LOGDIR"/shard*/step-times.txt
+  check_ceiling
   if [ "$rc" -eq 0 ]; then echo "RESULT OK"; else echo "RESULT FAILED"; fi
   exit $rc
 fi
@@ -134,5 +173,6 @@ done
 # Headless AI lap test (#34): ai_lap_check runs every combo twice in ONE process and asserts identical
 # lap ticks (in-process determinism, #179). CSVs land in $LOGDIR/ai_lap for archiving (~55 s).
 AI_LAP_OUT="$LOGDIR/ai_lap" run_step ai_lap_check "$GODOT" --headless --fixed-fps 120 --path project -s res://tests/ai_lap_check.gd
-echo "== per-step wall time (s), slowest first =="; sort -rn "$TIMES"; echo "total: $SECONDS s"
+print_times "$TIMES"
+check_ceiling
 exit $rc
