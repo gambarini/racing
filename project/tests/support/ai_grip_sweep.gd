@@ -30,7 +30,7 @@ func _main() -> void:
 	var max_ticks := 120 * 260
 	var ai := drive.start_ai(line, max_ticks)
 	ai.speed_scale = scale
-	for p in ["look_k", "look_min", "look_max", "kp", "ki", "brake_kp", "brake_deadband", "lead_time", "slip_target_deg", "slip_span_deg", "counter_gain", "grip_a_max", "grip_accel_ref", "grip_lead"]:
+	for p in ["look_k", "look_min", "look_max", "kp", "ki", "brake_kp", "brake_deadband", "lead_time", "slip_target_deg", "slip_span_deg", "counter_gain", "grip_a_max", "grip_accel_ref", "grip_lead", "crab_ct_gain", "crab_soft", "crab_throttle_k"]:
 		var e := OS.get_environment("AI_" + String(p).to_upper())
 		if e != "":
 			ai.set(p, float(e))
@@ -42,8 +42,10 @@ func _main() -> void:
 	var lap_max := 0.0
 	var seen := 0
 	var off_ticks := 0
+	var zone_max := 0.0
+	var peak_slip := 0.0
 	var rows := PackedStringArray()
-	rows.append("tick,s,speed,target,centre,cross_track,rear_slip,front_slip,steer_ang,fy_front,fy_rear,yaw,kappa,fx_rear,thr,steer_cmd,cap")
+	rows.append("tick,s,speed,target,centre,cross_track,rear_slip,front_slip,steer_ang,fy_front,fy_rear,yaw,kappa,fx_rear,thr,steer_cmd,cap,brk")
 	while lt.laps.size() < laps and ticks < max_ticks:
 		await physics_frame
 		ticks += 1
@@ -54,6 +56,9 @@ func _main() -> void:
 			max_centre = centre
 			worst_s = ai.s
 		lap_max = maxf(lap_max, centre)
+		peak_slip = maxf(peak_slip, absf(ai.rear_slip_deg))
+		if ai.s >= 620.0 and ai.s <= 760.0:
+			zone_max = maxf(zone_max, centre)
 		if lt.laps.size() > seen:
 			seen = lt.laps.size()
 			print("LAP %d: %.3f s, max centre %.2f m" % [seen, lt.laps[seen - 1]["raw_time"], lap_max])
@@ -61,13 +66,14 @@ func _main() -> void:
 		if csv != "" and ticks % 6 == 0:
 			var w := drive.vehicle.wheels
 			var yaw := drive.vehicle.angular_velocity.y
-			rows.append("%d,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.2f,%.2f" % [ticks, ai.s, ai.speed_now, ai.target_speed,
+			rows.append("%d,%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f" % [ticks, ai.s, ai.speed_now, ai.target_speed,
 					line.lane_offset_at(ai.s) - ai.cross_track, ai.cross_track, ai.rear_slip_deg, rad_to_deg(w[0].alpha),
-					w[0].steer_angle, w[0].fy + w[1].fy, w[2].fy + w[3].fy, yaw, line.curvature_at(ai.s), w[2].fx + w[3].fx, ai.throttle_out, ai.steer_out, ai.lat_cap_now])
+					w[0].steer_angle, w[0].fy + w[1].fy, w[2].fy + w[3].fy, yaw, line.curvature_at(ai.s), w[2].fx + w[3].fx, ai.throttle_out, ai.steer_out, ai.lat_cap_now, ai.brake_out])
 		if off_ticks > 1500:
 			break
 	print("RESULT skill %.3f scale %.2f: laps %d, max centre %.2f m at s=%.0f, off-road ticks %d, grass %d, ticks %d" % [
 			skill, scale, lt.laps.size(), max_centre, worst_s, off_ticks, drive.grass_ticks, ticks])
+	print("ZONE s 620-760 max centre %.2f m, peak rear slip %.1f deg" % [zone_max, peak_slip])
 	if csv != "":
 		var f := FileAccess.open(csv, FileAccess.WRITE)
 		f.store_string("\n".join(rows) + "\n")
