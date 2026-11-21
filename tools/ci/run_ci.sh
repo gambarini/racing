@@ -62,7 +62,7 @@ in_shard() { # name -> 0 if this run should execute it
 # 10-min workflow timeout) bounds the whole run's wall time (lock waiting excluded).
 BUDGET_DEFAULT="${CI_BUDGET_DEFAULT:-45}"
 CEILING="${CI_TOTAL_CEILING:-480}"
-BUDGET_TABLE=" import=60 tests=90 ai_personality_check=200 ai_tactics_check=100 ai_lap_check=100 ai_driver_check=75 "
+BUDGET_TABLE=" import=45 tests=80 ai_personality_check=240 ai_tactics_check=180 ai_lap_check=100 ai_driver_check=75 quarry_independence_check=75 "
 budget_for() { # name -> seconds
   local name="$1" kv
   local ov="${CI_BUDGET_OVERRIDE:-}"; for kv in ${ov//,/ }; do
