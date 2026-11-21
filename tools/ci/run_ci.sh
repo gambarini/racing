@@ -90,6 +90,9 @@ run_once() { # tag, name, log, command...  (tag: "STEP FAILED", or "ATTEMPT FAIL
   # sleep-based watchdog (portable: macOS has no GNU timeout); output goes through a fifo into tee.
   local tag="$1" name="$2" log="$3"; shift 3
   local limit; limit="$(awk -v b="$(budget_for "$name")" -v m="$TIMEOUT_MULT" 'BEGIN{printf "%d", b*m + 0.999}')"
+  # Never let a step outlive the whole-run ceiling (min 5 s so a late step can still report).
+  local remain=$((CEILING - (SECONDS - START))); [ "$remain" -lt 5 ] && remain=5
+  [ "$limit" -gt "$remain" ] && limit=$remain
   [ "$SHARD_N" -le 1 ] && echo "::group::$name"
   echo "STEP START: $name"
   local fifo="$LOGDIR/.$name.fifo.$$" flag="$LOGDIR/.$name.timeout.$$"
@@ -180,7 +183,6 @@ if [ -n "${CI:-}" ] && [ -z "${SHARD:-}" ] && [ -z "${RUN_CI_SERIAL:-}" ]; then
         | awk -v p="[s$i] " '{print p $0; fflush()}'; exit "${PIPESTATUS[0]}" ) &
     pids+=($!)
   done
-  kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
   trap 'for p in "${pids[@]}"; do kill_tree "$p"; done; echo "KILLED"; exit 143' INT TERM
   for k in 0 1 2; do wait "${pids[$k]}" || rc=1; done
   trap - INT TERM
