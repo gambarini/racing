@@ -150,11 +150,11 @@ func build_visual() -> void:
 					var c := a + w + 1
 					var e := c + 1
 					idx[j] = a
-					idx[j + 1] = c
-					idx[j + 2] = b
+					idx[j + 1] = b
+					idx[j + 2] = c
 					idx[j + 3] = b
-					idx[j + 4] = c
-					idx[j + 5] = e
+					idx[j + 4] = e
+					idx[j + 5] = c
 					j += 6
 			var arrays := []
 			arrays.resize(Mesh.ARRAY_MAX)

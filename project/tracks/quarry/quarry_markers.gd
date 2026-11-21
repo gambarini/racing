@@ -10,11 +10,12 @@
 class_name QuarryMarkers
 extends Node3D
 
-const POST_STEP := 10.0 ## m between edge posts along a route
+const POST_STEP := 8.0 ## m between edge posts along a route
 const LINE_STEP := 4.0 ## m between edge line strip centres
 const POST_OFFSET := 0.8 ## m outside the road edge
 const LINE_INSET := 0.4 ## m inside the road edge
 const CORNER_RADIUS := 100.0 ## corners tighter than this get a warning board (acceptance floor: 60 m)
+const CORNER_TIGHT := 60.0 ## radius of the corners the acceptance criteria name; their turn-in anchors the board
 const CORNER_BEFORE := 60.0 ## board distance before the turn-in (acceptance window 40-80 m)
 const CORNER_SIDE := 3.0 ## m beyond the road edge, on the outside of the bend
 const CURV_SPAN := 4 ## centre-line points either side used for the curvature estimate (1.5 m apart)
@@ -25,8 +26,9 @@ const POST_RIGHT := Color(0.9, 0.1, 0.1)
 const BOARD_COLOR := Color(1.0, 0.82, 0.0)
 const CHEVRON_COLOR := Color(0.05, 0.05, 0.05)
 
-var corners: Array[Dictionary] = [] ## {s_in, s_out, r_min, turn (+1 right / -1 left), s_marker, position, forward}
+var corners: Array[Dictionary] = [] ## {s_in, s_turn (turn-in: first point under CORNER_TIGHT, else s_in), s_out, r_min, turn (+1 right / -1 left), s_marker, position, forward}
 var post_counts := {} ## route name -> posts per side
+var xforms := {} ## MultiMesh node name -> Array[Transform3D] as written (readable headless, where the RenderingServer is a dummy)
 
 
 func build(q: Quarry) -> void:
@@ -85,12 +87,19 @@ func _mm(node_name: StringName, mesh: Mesh, count: int, colours: bool) -> MultiM
 	mm.use_colors = colours
 	mm.mesh = mesh
 	mm.instance_count = count
+	xforms[node_name] = [] as Array[Transform3D]
+	mm.set_meta(&"n", node_name)
 	var mi := MultiMeshInstance3D.new()
 	mi.name = node_name
 	mi.multimesh = mm
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 	return mm
+
+
+func _put(mm: MultiMesh, k: int, xf: Transform3D) -> void:
+	mm.set_instance_transform(k, xf)
+	(xforms[mm.get_meta(&"n")] as Array[Transform3D]).append(xf)
 
 
 func _posts(_q: Quarry, node_name: StringName, pts: Array[Dictionary], left_col: Color, right_col: Color, terrain: HeightmapTerrain) -> void:
@@ -105,14 +114,14 @@ func _posts(_q: Quarry, node_name: StringName, pts: Array[Dictionary], left_col:
 		for side in [-1.0, 1.0]:
 			var p: Vector2 = e["p"] + right * side * (float(e["hw"]) + POST_OFFSET)
 			var y := terrain.height_at(p.x, p.y)
-			mm.set_instance_transform(k, Transform3D(Basis.looking_at(Vector3(f.x, 0, f.y), Vector3.UP), Vector3(p.x, y + 0.6, p.y)))
+			_put(mm, k, Transform3D(Basis.looking_at(Vector3(f.x, 0, f.y), Vector3.UP), Vector3(p.x, y + 0.6, p.y)))
 			mm.set_instance_color(k, left_col if side < 0.0 else right_col)
 			k += 1
 
 
 func _lines(_q: Quarry, node_name: StringName, pts: Array[Dictionary], step: float, terrain: HeightmapTerrain) -> void:
 	var box := BoxMesh.new()
-	box.size = Vector3(0.3, 0.04, step + 0.2)
+	box.size = Vector3(0.3, 0.04, step + 0.6)
 	box.material = _unshaded(LINE_COLOR)
 	var mm := _mm(node_name, box, pts.size() * 2, false)
 	var k := 0
@@ -122,7 +131,10 @@ func _lines(_q: Quarry, node_name: StringName, pts: Array[Dictionary], step: flo
 		for side in [-1.0, 1.0]:
 			var p: Vector2 = e["p"] + right * side * (float(e["hw"]) - LINE_INSET)
 			var y := terrain.height_at(p.x, p.y)
-			mm.set_instance_transform(k, Transform3D(Basis.looking_at(Vector3(f.x, 0, f.y), Vector3.UP), Vector3(p.x, y + 0.08, p.y)))
+			var a := p - f * step * 0.5
+			var b := p + f * step * 0.5
+			var dir := Vector3(b.x - a.x, terrain.height_at(b.x, b.y) - terrain.height_at(a.x, a.y), b.y - a.y)
+			_put(mm, k, Transform3D(Basis.looking_at(dir, Vector3.UP), Vector3(p.x, y + 0.1, p.y)))
 			k += 1
 
 
@@ -162,14 +174,17 @@ static func find_corners(q: Quarry) -> Array[Dictionary]:
 			if cur.is_empty() or (ss[k] - float(cur["s_out"]) + (q.track_length if ss[k] < float(cur["s_out"]) else 0.0)) > 20.0:
 				if not cur.is_empty():
 					out.append(cur)
-				cur = {"s_in": ss[k], "s_out": ss[k], "r_min": rad[k], "turn": int(turn[k]), "i_in": k}
+				cur = {"s_in": ss[k], "s_turn": ss[k], "tight": false, "s_out": ss[k], "r_min": rad[k], "turn": int(turn[k])}
+			if rad[k] < CORNER_TIGHT and not cur["tight"]:
+				cur["tight"] = true
+				cur["s_turn"] = ss[k]
 			cur["s_out"] = ss[k]
 			cur["r_min"] = minf(float(cur["r_min"]), rad[k])
 		i += 1
 	if not cur.is_empty():
 		out.append(cur)
 	for c in out:
-		var s_mark := fposmod(float(c["s_in"]) - CORNER_BEFORE, q.track_length)
+		var s_mark := fposmod(float(c["s_turn"]) - CORNER_BEFORE, q.track_length)
 		var j := q._index_at(s_mark) % m
 		var f := (xz[(j + 1) % m] - xz[(j + m - 1) % m]).normalized()
 		var right := Vector2(-f.y, f.x)
@@ -227,9 +242,9 @@ func _corner_boards(q: Quarry) -> void:
 		var pos: Vector3 = c["position"]
 		pos.y = q.terrain.height_at(pos.x, pos.z)
 		var basis := Basis.looking_at(c["forward"], Vector3.UP)
-		mm_p.set_instance_transform(k, Transform3D(basis, pos + Vector3(0, 0.7, 0)))
+		_put(mm_p, k, Transform3D(basis, pos + Vector3(0, 0.7, 0)))
 		var tb := Transform3D(basis, pos + Vector3(0, 2.7, 0))
-		mm_b.set_instance_transform(k, tb)
+		_put(mm_b, k, tb)
 		var face := Transform3D(basis, tb.origin + basis.z * 0.1)
 		(rights if int(c["turn"]) > 0 else lefts).append(face)
 		c["board_transform"] = tb
@@ -238,7 +253,7 @@ func _corner_boards(q: Quarry) -> void:
 		var list: Array[Transform3D] = pair[2]
 		var mm := _mm(pair[0], _chevron_mesh(pair[1]), list.size(), false)
 		for k in list.size():
-			mm.set_instance_transform(k, list[k])
+			_put(mm, k, list[k])
 
 
 ## Start/finish: chequered gantry across the road and a chequered line on it at s = 0.
