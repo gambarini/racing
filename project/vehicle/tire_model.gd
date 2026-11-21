@@ -4,6 +4,10 @@
 ## Method: one normalised slip s = hypot(kappa/kappa_peak, alpha/alpha_peak) drives a single
 ## friction curve; force direction follows the slip vector, so the friction ellipse (circle in
 ## normalised space) holds by construction and braking/lateral coupling is automatic.
+## Past the peak the force direction blends from the normalised slip vector to the slide-velocity
+## direction (#223): a sliding patch is pushed against its own sliding velocity, (kappa, -tan alpha)
+## in the wheel frame. Without this, kappa_peak < alpha_peak makes a locked steered wheel push
+## along its own -heading, which on the fronts yaws the car against the steering input.
 class_name TireModel
 extends RefCounted
 
@@ -36,7 +40,20 @@ static func compute(kappa: float, alpha: float, fz: float, p: TireParams) -> Vec
 	if s < 1e-9:
 		return Vector2.ZERO
 	var f := effective_mu(fz, p) * fz * shape(s, p)
-	return Vector2(f * sx / s, -f * sy / s)
+	var t := slide_blend(s, p)
+	if t <= 0.0:
+		return Vector2(f * sx / s, -f * sy / s)
+	# Slide-velocity direction, (kappa, -tan alpha) scaled by cos alpha so it cannot overflow.
+	var slide := Vector2(kappa * cos(alpha), -sin(alpha)).normalized()
+	return Vector2(sx / s, -sy / s).lerp(slide, t).normalized() * f
+
+
+## Weight of the slide-velocity direction: 0 up to the peak (s <= 1), C1 smoothstep to 1 at
+## s = p.slide_blend_end, so the numerical slopes used by the implicit solves stay continuous.
+static func slide_blend(s: float, p: TireParams) -> float:
+	if s <= 1.0:
+		return 0.0
+	return smoothstep(1.0, maxf(p.slide_blend_end, 1.0 + 1e-3), s)
 
 
 ## Maximum force along one axis (the friction ellipse semi-axis) at this load.

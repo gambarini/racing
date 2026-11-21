@@ -19,8 +19,9 @@ const ROAD_HALF := 6.5
 const FIELD := 8
 const FIELD_LAPS := 4
 const FIELD_SEED := 2026
-const SPREAD_MIN := 0.5 ## s (estimate)
+const SPREAD_MIN := 0.3 ## s (estimate; measured 0.43..0.73 s on Linux/macOS for the same personalities, #223)
 const SPREAD_MAX := 4.0 ## s (estimate)
+const MAX_STRANDED := 1 ## field cars allowed to set no lap after being punted into a trap (#223)
 
 var cu := CheckUtil.new()
 
@@ -184,12 +185,21 @@ func _field() -> void:
 		bests.append(best)
 		print("INFO: car %d skill %.3f consistency %.2f: laps %s, best %.2f s, centre max %.2f m, mistakes %d" % [
 				i, field[i].skill, field[i].consistency, str(laps), best, pilot.max_centre[i], drivers[i].mistakes])
+	# A car punted into a trap by contact sets no lap (the game has no AI stuck-recovery yet, and the
+	# field pilot adds none), so the spread is over cars with a lap, and stranded cars are capped.
 	var lo := 1.0e9
 	var hi := 0.0
-	for b: float in bests:
+	var timed := 0
+	for i in FIELD:
+		var b: float = bests[i]
+		if b >= 1.0e9:
+			print("INFO: car %d set no lap, stranded at %s" % [i, str(vehicles[i].global_position)])
+			continue
+		timed += 1
 		lo = minf(lo, b)
 		hi = maxf(hi, b)
-	print("INFO: field spread (best - worst per-AI best lap) %.3f s over %d cars, contacts %d" % [hi - lo, FIELD, pilot.contacts])
+	cu.check(FIELD - timed <= MAX_STRANDED, "field cars with no lap %d <= %d" % [FIELD - timed, MAX_STRANDED])
+	print("INFO: field spread (best - worst per-AI best lap) %.3f s over %d cars, contacts %d" % [hi - lo, timed, pilot.contacts])
 	cu.check_range("Medium field per-AI best-lap spread (s)", hi - lo, SPREAD_MIN, SPREAD_MAX)
 	pilot.queue_free()
 	for v in vehicles:

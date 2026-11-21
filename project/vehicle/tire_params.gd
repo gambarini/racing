@@ -9,6 +9,9 @@ extends Resource
 @export var alpha_peak := 0.14 ## slip angle of peak force, rad (8 deg)
 ## Sharpness of the post-peak drop: g = r + (1 - r) / (1 + falloff*(x-1)^2), r = mu_slide/mu_peak.
 @export var falloff := 0.1
+## Normalised slip at which the force direction fully follows the slide velocity (#223); between
+## the peak (1) and this value it blends from the normalised slip direction.
+@export var slide_blend_end := 2.0
 @export var nominal_load := 3000.0 ## N, load at which mu_peak/mu_slide apply
 ## Fractional loss of mu per extra nominal_load of Fz (0.05 -> -5 % mu at 2x load).
 @export var load_sensitivity := 0.075
@@ -39,6 +42,7 @@ static func for_surface_into(base: TireParams, surface: SurfaceDefinition, out: 
 	out.kappa_peak = base.kappa_peak * surface.peak_slip_scale
 	out.alpha_peak = base.alpha_peak * surface.peak_slip_scale
 	out.falloff = base.falloff
+	out.slide_blend_end = base.slide_blend_end
 	out.nominal_load = base.nominal_load
 	out.load_sensitivity = base.load_sensitivity
 	out.relaxation_length = base.relaxation_length
