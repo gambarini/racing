@@ -1,5 +1,5 @@
 ## AI personality check (#30): scene-level criteria on the Quarry.
-##  1. Solo AI per difficulty preset (Easy / Medium / Hard mean personality), 4 laps: flying-lap time
+##  1. Solo AI per difficulty preset (Easy / Medium / Hard mean personality), 3 laps: flying-lap time
 ##     strictly ordered Easy > Medium > Hard, each step >= 1.0 s/lap (estimate); 3+ laps complete;
 ##     max centre-line offset <= road half width.
 ##  2. Consistency 0.2 vs 1.0 at the same skill: std-dev of 5 flying laps larger for 0.2; 1.0 injects

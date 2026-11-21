@@ -103,11 +103,10 @@ func _main() -> void:
 	await physics_frame
 	await _speed_hold()
 
-	# #225: the former warm-up run is merged into `a` (it recorded the telemetry CSV); a vs b still proves determinism.
+	# #225: the former warm-up run is merged into `a` (it recorded the telemetry CSV).
 	var a := await _lap_run(OS.get_environment("AI_CSV") if OS.get_environment("AI_CSV") != "" else "user://ai_driver_lap.csv")
-	for r in [a]:
-		cu.check(r.laps.size() >= LAPS, "default AI completes %d consecutive laps (%d)" % [LAPS, r.laps.size()])
-		cu.check(r.laps.size() >= 2, "two consecutive laps completed (%d)" % r.laps.size())
+	cu.check(a.laps.size() >= LAPS, "default AI completes %d consecutive laps (%d)" % [LAPS, a.laps.size()])
+	cu.check(a.laps.size() >= 2, "two consecutive laps completed (%d)" % a.laps.size())
 	cu.check(a.gates == 12, "track has 12 gates (%d)" % a.gates)
 	cu.check(a.out_of_order == 0, "LapTimer accepted every gate in order (out-of-order crossings %d)" % a.out_of_order)
 	cu.check(a.wrong_ticks == 0, "zero wrong-way flags (%d ticks)" % a.wrong_ticks)
