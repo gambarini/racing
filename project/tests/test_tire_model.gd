@@ -113,6 +113,34 @@ func test_combined() -> void:
 	assert_true(absf(lock.y) <= 0.4 * fmax, "locked-wheel Fy %.1f <= 40%% of %.1f" % [absf(lock.y), fmax])
 
 
+## #223: a locked, sliding wheel is pushed against its slide velocity (kappa, -tan alpha), not along
+## the normalised-slip vector (which, with kappa_peak < alpha_peak, points almost along -heading).
+func test_locked_slide_direction() -> void:
+	for a in [0.05, 0.15, 0.3, -0.2]:
+		var f := TireModel.compute(-1.0, a, FZ, P)
+		var want := Vector2(-1.0, -tan(a)).normalized()
+		assert_almost_eq(f.normalized().dot(want), 1.0, 1e-6, "locked alpha %.2f: force opposes slide" % a)
+		assert_lt(f.y * a, 0.0, "locked alpha %.2f: Fy opposes alpha" % a)
+
+
+## #223: up to the peak (s <= 1) the direction is the normalised slip vector, bit-identical to the
+## pre-#223 model, and the magnitude is unchanged everywhere (friction ellipse intact).
+func test_slide_blend_regions() -> void:
+	for ks in [[0.05, 0.05], [-0.06, 0.08], [0.0, 0.1], [-1.0, 0.2], [0.4, -0.3]]:
+		var k: float = ks[0]
+		var a: float = ks[1]
+		var sx := k / P.kappa_peak
+		var sy := a / P.alpha_peak
+		var s := sqrt(sx * sx + sy * sy)
+		var f_mag := TireModel.effective_mu(FZ, P) * FZ * TireModel.shape(s, P)
+		var f := TireModel.compute(k, a, FZ, P)
+		assert_almost_eq(f.length(), f_mag, 1e-6 * f_mag, "|F| unchanged at k %.2f a %.2f" % [k, a])
+		if s <= 1.0:
+			assert_eq(f, Vector2(f_mag * sx / s, -f_mag * sy / s), "pre-peak direction unchanged")
+	assert_eq(TireModel.slide_blend(1.0, P), 0.0)
+	assert_eq(TireModel.slide_blend(P.slide_blend_end, P), 1.0)
+
+
 func test_load() -> void:
 	var m3 := TireModel.effective_mu(3000.0, P)
 	var m6 := TireModel.effective_mu(6000.0, P)
