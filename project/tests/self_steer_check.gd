@@ -137,6 +137,7 @@ func _case_c() -> void:
 	var drive: QuarryDrive = (load(QUARRY) as PackedScene).instantiate()
 	drive.get_node("TimeTrial").ghost_path = "user://test_ghost_self_steer.dat"
 	get_root().add_child(drive)
+	drive.get_node("Vehicle/VehicleAudio").free() # audio is not under test and holds streams at exit
 	await physics_frame
 	var q := drive.quarry
 	var v := drive.vehicle
